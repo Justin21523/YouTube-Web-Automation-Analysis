@@ -4,8 +4,14 @@ Tests configuration, cache, and database connectivity
 """
 
 import pytest
+import sys
 from pathlib import Path
 
+# ← ADD: Fix import path for tests
+ROOT_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT_DIR))
+
+from sqlalchemy import text  # ← ADD this import
 from src.app.config import get_config, validate_config, reset_config
 from src.app.shared_cache import get_shared_cache, reset_cache
 from src.app.database import engine
@@ -169,8 +175,8 @@ class TestDatabase:
     def test_database_connection(self):
         """Test database connection"""
         with engine.connect() as connection:
-            result = connection.execute("SELECT 1")  # type: ignore
-            assert result.fetchone()[0] == 1
+            result = connection.execute(text("SELECT 1"))
+            assert result.fetchone()[0] == 1  # type: ignore
 
         print("\n✅ Database connection successful")
 
@@ -199,8 +205,8 @@ class TestIntegration:
 
         # Test database
         with engine.connect() as connection:
-            result = connection.execute("SELECT 1")  # type: ignore
-            assert result.fetchone()[0] == 1
+            result = connection.execute(text("SELECT 1"))
+            assert result.fetchone()[0] == 1  # type: ignore
 
         print("\n✅ Full stack integration works")
 

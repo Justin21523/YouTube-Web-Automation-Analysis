@@ -4,7 +4,7 @@ Database Configuration and Session Management
 Uses SQLAlchemy with async support
 """
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from typing import Generator
@@ -96,8 +96,8 @@ if __name__ == "__main__":
 
     try:
         with engine.connect() as connection:
-            result = connection.execute("SELECT 1")  # type: ignore
-            assert result.fetchone()[0] == 1
+            result = connection.execute(text("SELECT 1"))
+            assert result.fetchone()[0] == 1  # type: ignore
         print("✅ Database connection successful!")
 
         # Initialize tables

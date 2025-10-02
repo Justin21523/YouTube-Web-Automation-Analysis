@@ -39,15 +39,15 @@ dev:
 	@echo "🔥 Starting development server..."
 	@uvicorn src.app.main:app --reload --host 0.0.0.0 --port 8000
 
-# Run all tests
-test:
-	@echo "🧪 Running all tests..."
-	@pytest tests/ -v -s
-
 # Run setup tests only
 test-setup:
 	@echo "🧪 Running setup/smoke tests..."
-	@pytest tests/test_setup.py -v -s
+	@export PYTHONPATH="${PWD}:${PYTHONPATH}" && pytest tests/test_setup.py -v -s
+
+# Run all tests
+test:
+	@echo "🧪 Running all tests..."
+	@export PYTHONPATH="${PWD}:${PYTHONPATH}" && pytest tests/ -v -s
 
 # Check configuration
 check-config:

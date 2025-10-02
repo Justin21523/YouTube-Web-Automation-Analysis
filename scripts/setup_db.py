@@ -10,6 +10,7 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
+from sqlalchemy import text  # ← ADD this import
 from src.app.database import init_db, engine
 from src.app.config import get_config, validate_config, setup_logging
 
@@ -46,8 +47,8 @@ def main():
         # Test connection
         print("\n🔌 Testing database connection...")
         with engine.connect() as conn:
-            result = conn.execute("SELECT 1")  # type: ignore
-            assert result.fetchone()[0] == 1
+            result = conn.execute(text("SELECT 1"))
+            assert result.fetchone()[0] == 1  # type: ignore
 
         print("✅ Database connection successful")
 
