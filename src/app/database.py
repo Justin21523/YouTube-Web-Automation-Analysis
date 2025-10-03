@@ -11,10 +11,23 @@ from typing import Generator
 import logging
 
 from src.app.config import get_config
+from src.infrastructure.database.connection import (
+    Base,
+    DatabaseManager,
+    db_manager,
+    get_session,
+)
 
 logger = logging.getLogger(__name__)
 
 config = get_config()
+
+__all__ = [
+    "Base",
+    "DatabaseManager",
+    "db_manager",
+    "get_session",
+]
 
 # Create engine
 engine = create_engine(
