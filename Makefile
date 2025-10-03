@@ -1,87 +1,229 @@
-# Makefile for YouTube-Web-Automation-Analysis
-.PHONY: help install setup dev test lint format clean check-config
+# Makefile - YouTube Web Automation Analysis Project
+# Development task automation
+
+.PHONY: help install test smoke-test lint format clean docker-up docker-down
 
 # Default target
 help:
-	@echo "YouTube-Web-Automation-Analysis - Available Commands"
-	@echo "=================================================="
-	@echo "setup          : Initial project setup"
-	@echo "install        : Install Python dependencies"
-	@echo "dev            : Run development server"
-	@echo "test           : Run all tests"
-	@echo "test-setup     : Run setup/smoke tests only"
-	@echo "lint           : Run code linting"
-	@echo "format         : Format code"
-	@echo "clean          : Clean cache and temporary files"
-	@echo "check-config   : Validate configuration"
-	@echo "reset-db       : Reset database (WARNING: deletes all data)"
+	@echo "📋 YouTube Web Automation Analysis - Available Commands"
+	@echo ""
+	@echo "🔧 Setup & Installation:"
+	@echo "  make install          Install Python dependencies"
+	@echo "  make install-dev      Install dev dependencies + pre-commit hooks"
+	@echo "  make setup-env        Create .env from template"
+	@echo ""
+	@echo "🧪 Testing:"
+	@echo "  make test             Run all unit tests"
+	@echo "  make test-unit        Run unit tests only"
+	@echo "  make test-integration Run integration tests (requires API key)"
+	@echo "  make smoke-test       Run smoke tests for YouTube API"
+	@echo "  make test-coverage    Run tests with coverage report"
+	@echo ""
+	@echo "✅ Code Quality:"
+	@echo "  make lint             Run linters (ruff, mypy)"
+	@echo "  make format           Auto-format code (black, isort)"
+	@echo "  make type-check       Run type checking only"
+	@echo ""
+	@echo "🚀 Development:"
+	@echo "  make run-api          Start FastAPI server"
+	@echo "  make run-frontend     Start React dev server"
+	@echo "  make run-all          Start both backend + frontend"
+	@echo ""
+	@echo "🐳 Docker:"
+	@echo "  make docker-build     Build Docker images"
+	@echo "  make docker-up        Start all services"
+	@echo "  make docker-down      Stop all services"
+	@echo "  make docker-logs      View service logs"
+	@echo ""
+	@echo "🗑️  Cleanup:"
+	@echo "  make clean            Remove cache and temp files"
+	@echo "  make clean-all        Deep clean (includes venv)"
 
-# Initial setup
-setup:
-	@echo "🚀 Running initial project setup..."
-	@pip install --upgrade pip
-	@pip install -r requirements.txt
-	@cp .env.example .env || true
-	@python -m src.app.config
-	@python -m src.app.shared_cache
-	@python scripts/setup_db.py
-	@echo "✅ Setup complete! Run 'make dev' to start the server."
+# ============================================================================
+# Setup & Installation
+# ============================================================================
 
-# Install dependencies
 install:
 	@echo "📦 Installing dependencies..."
-	@pip install --upgrade pip
-	@pip install -r requirements.txt
-	@echo "✅ Dependencies installed"
+	pip install -r requirements.txt
 
-# Run development server
-dev:
-	@echo "🔥 Starting development server..."
-	@uvicorn src.app.main:app --reload --host 0.0.0.0 --port 8000
+install-dev:
+	@echo "📦 Installing dev dependencies..."
+	pip install -r requirements-dev.txt
+	pre-commit install
+	@echo "✅ Pre-commit hooks installed"
 
-# Run setup tests only
-test-setup:
-	@echo "🧪 Running setup/smoke tests..."
-	@export PYTHONPATH="${PWD}:${PYTHONPATH}" && pytest tests/test_setup.py -v -s
+setup-env:
+	@if [ ! -f .env ]; then \
+		echo "📝 Creating .env from template..."; \
+		cp .env.example .env; \
+		echo "✅ Created .env - Please fill in your API keys"; \
+	else \
+		echo "⚠️  .env already exists, skipping"; \
+	fi
 
-# Run all tests
+# ============================================================================
+# Testing
+# ============================================================================
+
 test:
 	@echo "🧪 Running all tests..."
-	@export PYTHONPATH="${PWD}:${PYTHONPATH}" && pytest tests/ -v -s
+	pytest tests/ -v --tb=short
 
-# Check configuration
-check-config:
-	@echo "🔍 Checking configuration..."
-	@python -m src.app.config
+test-unit:
+	@echo "🧪 Running unit tests..."
+	pytest tests/unit/ -v --tb=short
 
-# Lint code
+test-integration:
+	@echo "🧪 Running integration tests..."
+	pytest tests/integration/ -v --tb=short -m integration
+
+smoke-test:
+	@echo "🧪 Running smoke tests..."
+	python scripts/smoke_test_youtube.py
+
+test-coverage:
+	@echo "📊 Running tests with coverage..."
+	pytest tests/ --cov=src --cov-report=html --cov-report=term
+	@echo "📊 Coverage report: htmlcov/index.html"
+
+# ============================================================================
+# Code Quality
+# ============================================================================
+
 lint:
 	@echo "🔍 Running linters..."
-	@flake8 src/ tests/ --max-line-length=88 --extend-ignore=E203,W503 || true
-	@echo "✅ Linting complete"
+	ruff check src/ tests/
+	mypy src/
 
-# Format code
 format:
 	@echo "✨ Formatting code..."
-	@black src/ tests/ scripts/
-	@isort src/ tests/ scripts/
-	@echo "✅ Formatting complete"
+	black src/ tests/ scripts/
+	isort src/ tests/ scripts/
+	@echo "✅ Code formatted"
 
-# Clean temporary files
+type-check:
+	@echo "🔍 Type checking..."
+	mypy src/ --strict
+
+# ============================================================================
+# Development
+# ============================================================================
+
+run-api:
+	@echo "🚀 Starting FastAPI server..."
+	uvicorn src.app.main:app --reload --host 0.0.0.0 --port 8000
+
+run-frontend:
+	@echo "🚀 Starting React dev server..."
+	cd frontend && npm run dev
+
+run-all:
+	@echo "🚀 Starting all services..."
+	@make -j2 run-api run-frontend
+
+# ============================================================================
+# Docker
+# ============================================================================
+
+docker-build:
+	@echo "🐳 Building Docker images..."
+	docker-compose build
+
+docker-up:
+	@echo "🐳 Starting Docker services..."
+	docker-compose up -d
+	@echo "✅ Services started:"
+	@echo "   API: http://localhost:8000"
+	@echo "   Frontend: http://localhost:3000"
+
+docker-down:
+	@echo "🐳 Stopping Docker services..."
+	docker-compose down
+
+docker-logs:
+	@echo "📜 Viewing service logs..."
+	docker-compose logs -f
+
+docker-rebuild:
+	@echo "🐳 Rebuilding and restarting services..."
+	docker-compose down
+	docker-compose build --no-cache
+	docker-compose up -d
+
+# ============================================================================
+# Database
+# ============================================================================
+
+db-init:
+	@echo "🗄️  Initializing database..."
+	python scripts/setup_db.py
+
+db-migrate:
+	@echo "🗄️  Running migrations..."
+	alembic upgrade head
+
+db-seed:
+	@echo "🌱 Seeding database..."
+	python scripts/seed_data.py
+
+db-reset:
+	@echo "⚠️  Resetting database..."
+	@read -p "Are you sure? [y/N] " -n 1 -r; \
+	echo; \
+	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+		rm -f youtube_analysis.db; \
+		make db-init; \
+		echo "✅ Database reset complete"; \
+	fi
+
+# ============================================================================
+# Cleanup
+# ============================================================================
+
 clean:
-	@echo "🧹 Cleaning temporary files..."
-	@find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-	@find . -type f -name "*.pyc" -delete
-	@find . -type f -name "*.pyo" -delete
-	@find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
-	@find . -type d -name ".mypy_cache" -exec rm -rf {} + 2>/dev/null || true
-	@rm -rf htmlcov/ .coverage
-	@echo "✅ Cleanup complete"
+	@echo "🗑️  Cleaning cache and temp files..."
+	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+	find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
+	find . -type d -name ".ruff_cache" -exec rm -rf {} + 2>/dev/null || true
+	find . -type d -name ".mypy_cache" -exec rm -rf {} + 2>/dev/null || true
+	find . -type f -name "*.pyc" -delete
+	find . -type f -name "*.pyo" -delete
+	find . -type f -name "*.coverage" -delete
+	rm -rf htmlcov/ .coverage
+	@echo "✅ Cleaned cache files"
 
-# Reset database (dangerous!)
-reset-db:
-	@echo "⚠️  WARNING: This will delete all database data!"
-	@echo "Press Ctrl+C to cancel, or wait 5 seconds to continue..."
-	@sleep 5
-	@python -c "from src.app.database import reset_database; reset_database()"
-	@echo "✅ Database reset complete"
+clean-all: clean
+	@echo "🗑️  Deep cleaning..."
+	rm -rf venv/ node_modules/
+	@echo "✅ Deep clean complete"
+
+# ============================================================================
+# Utilities
+# ============================================================================
+
+check-env:
+	@echo "🔍 Checking environment configuration..."
+	@python -c "import os; \
+		key = os.getenv('YOUTUBE_API_KEY'); \
+		if key: \
+			print('✅ YOUTUBE_API_KEY is set'); \
+		else: \
+			print('❌ YOUTUBE_API_KEY not found in environment'); \
+			print('   Run: make setup-env');"
+
+cache-stats:
+	@echo "📊 Cache statistics..."
+	@python -c "from core.shared_cache import get_shared_cache; \
+		cache = get_shared_cache(); \
+		stats = cache.get_cache_stats(); \
+		print(f'Cache Root: {stats[\"cache_root\"]}'); \
+		print(f'Total Size: {stats[\"total_size_gb\"]:.2f} GB'); \
+		print(f'GPU Available: {stats[\"gpu_available\"]}');"
+
+info:
+	@echo "ℹ️  Project Information"
+	@echo "  Python: $$(python --version)"
+	@echo "  Pip: $$(pip --version)"
+	@echo "  Git: $$(git --version 2>/dev/null || echo 'not installed')"
+	@echo "  Docker: $$(docker --version 2>/dev/null || echo 'not installed')"
