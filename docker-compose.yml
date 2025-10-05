@@ -1,0 +1,143 @@
+version: "3.8"
+
+services:
+  # Redis - Message Broker & Result Backend
+  redis:
+    image: redis:7-alpine
+    container_name: yt_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - yt_network
+
+  # PostgreSQL Database (Optional - can use SQLite)
+  # postgres:
+  #   image: postgres:15-alpine
+  #   container_name: yt_postgres
+  #   environment:
+  #     POSTGRES_USER: youtube_user
+  #     POSTGRES_PASSWORD: youtube_pass
+  #     POSTGRES_DB: youtube_automation
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U youtube_user"]
+  #     interval: 5s
+  #     timeout: 3s
+  #     retries: 5
+  #   networks:
+  #     - yt_network
+
+  # Celery Worker - Task Execution
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: yt_celery_worker
+    command: celery -A src.infrastructure.tasks.celery_app worker --loglevel=info --concurrency=4
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - YOUTUBE_API_KEY=${YOUTUBE_API_KEY}
+      - AI_CACHE_ROOT=/app/cache
+      - DB_URL=sqlite:////app/data/youtube_automation.db
+    volumes:
+      - ./:/app
+      - ${AI_CACHE_ROOT:-../ai_warehouse/cache}:/app/cache
+      - ./data:/app/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - yt_network
+    restart: unless-stopped
+
+  # Celery Beat - Scheduled Tasks
+  celery_beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: yt_celery_beat
+    command: celery -A src.infrastructure.tasks.celery_app beat --loglevel=info
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - YOUTUBE_API_KEY=${YOUTUBE_API_KEY}
+      - AI_CACHE_ROOT=/app/cache
+      - DB_URL=sqlite:////app/data/youtube_automation.db
+    volumes:
+      - ./:/app
+      - ${AI_CACHE_ROOT:-../ai_warehouse/cache}:/app/cache
+      - ./data:/app/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - yt_network
+    restart: unless-stopped
+
+  # Flower - Celery Monitoring UI
+  flower:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: yt_flower
+    command: celery -A src.infrastructure.tasks.celery_app flower --port=5555
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - FLOWER_PORT=5555
+    ports:
+      - "5555:5555"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - yt_network
+    restart: unless-stopped
+
+  # FastAPI Application
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: yt_api
+    command: uvicorn src.app.main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - YOUTUBE_API_KEY=${YOUTUBE_API_KEY}
+      - AI_CACHE_ROOT=/app/cache
+      - DB_URL=sqlite:////app/data/youtube_automation.db
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./:/app
+      - ${AI_CACHE_ROOT:-../ai_warehouse/cache}:/app/cache
+      - ./data:/app/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - yt_network
+    restart: unless-stopped
+
+networks:
+  yt_network:
+    driver: bridge
+
+volumes:
+  redis_data:
+  postgres_data:

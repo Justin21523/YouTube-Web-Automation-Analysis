@@ -7,19 +7,26 @@ pydantic==2.5.3
 pydantic-settings==2.1.0
 
 # ============================================================================
-# HTTP Client & API
-# ============================================================================
-httpx==0.26.0
-requests==2.31.0
-
-# ============================================================================
 # Database & ORM
 # ============================================================================
 sqlalchemy==2.0.25
-alembic==1.13.1
-psycopg2-binary>=2.9.0  # PostgreSQL driver
-asyncpg>=0.29.0  # Async PostgreSQL
 aiosqlite==0.19.0  # For async SQLite
+asyncpg>=0.29.0  # Async PostgreSQL
+aiomysql==0.2.0            # For async MySQL (optional)
+alembic==1.13.1            # Database migrations
+psycopg2-binary>=2.9.0  # PostgreSQL driver
+
+# YouTube API Client
+google-api-python-client==2.116.0
+google-auth==2.27.0
+google-auth-oauthlib==1.2.0
+google-auth-httplib2==0.2.0
+
+# HTTP & Rate Limiting
+httpx==0.26.0
+aiohttp==3.9.1
+requests==2.31.0
+redis==5.0.1               # For distributed rate limiting (optional)
 
 # ============================================================================
 # Caching & Task Queue
@@ -45,6 +52,8 @@ transformers>=4.36.0
 sentence-transformers==2.3.1
 nltk==3.8.1
 spacy==3.7.2
+sacremoses==0.1.1
+langdetect==1.0.9
 
 # ============================================================================
 # Data Processing
@@ -60,7 +69,19 @@ python-dotenv==1.0.0
 pyyaml==6.0.1
 pytz==2023.3.post1
 python-dateutil==2.8.2
+typing-extensions==4.9.0
 
+# Testing
+pytest==7.4.4
+pytest-asyncio==0.23.3
+pytest-cov==4.1.0
+httpx-mock
+
+# Development Tools
+black==24.1.1
+flake8==7.0.0
+mypy==1.8.0
+pre-commit==3.6.0
 
 # ============================================================================
 # Logging & Monitoring
@@ -69,10 +90,18 @@ loguru==0.7.2
 structlog==24.1.0
 prometheus-client>=0.17.1
 
-
 # ============================================================================
 # Security & Validation
 # ============================================================================
 cryptography==41.0.7
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
+celery[redis]==5.3.4
+flower==2.0.1          # Monitoring UI
+redis==5.0.1           # Redis client
+kombu==5.3.4           # Messaging library
+vine==5.1.0
+billiard==4.2.0
+
+# Monitoring & Logging
+python-json-logger==2.0.7
