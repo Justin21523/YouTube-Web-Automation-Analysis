@@ -321,6 +321,11 @@ def _register_routers(app: FastAPI, config) -> None:
     app.include_router(ws_router)
     logger.info("  🔌 WebSocket router registered")
 
+    # Register authentication router
+    from src.api.routers.auth_router import router as auth_router
+    app.include_router(auth_router)
+    logger.info("  🔐 Auth router registered")
+
     # Register core API routers
     from src.api.routers.task_router import router as task_router
     from src.api.routers.health_router import router as health_router, set_startup_time

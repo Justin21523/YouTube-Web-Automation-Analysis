@@ -9,6 +9,8 @@ from .caption_service import CaptionService
 from .vqa_service import VQAService
 from .chat_service import ChatService
 from .rag_service import RAGService
+from .auth_service import AuthService
+from .llm_client import get_llm_client, LLMClientFactory, BaseLLMClient
 from . import task_tracking_service as TaskTrackingService
 from .exceptions import (
     # Base
@@ -60,7 +62,13 @@ __all__ = [
     "VQAService",
     "ChatService",
     "RAGService",
+    "AuthService",
     "TaskTrackingService",
+
+    # LLM Client
+    "get_llm_client",
+    "LLMClientFactory",
+    "BaseLLMClient",
 
     # Base Exception
     "ServiceError",
@@ -72,32 +80,6 @@ __all__ = [
 
     # Validation Errors
     "ValidationError",
-    "BusinessRuleViolationError",
-
-    # External Service Errors
-    "ExternalServiceError",
-    "YouTubeAPIError",
-    "RateLimitExceededError",
-
-    # Processing Errors
-    "ProcessingError",
-    "AnalysisError",
-    "ScrapingError",
-
-    # Database Errors
-    "DatabaseError",
-    "TransactionError",
-
-    # Permission Errors
-    "PermissionDeniedError",
-
-    # Configuration Errors
-    "ConfigurationError",
-
-    # Utility Functions
-    "is_retryable_error",
-    "get_retry_delay",
-    "error_to_http_status",
     "BusinessRuleViolationError",
 
     # External Service Errors

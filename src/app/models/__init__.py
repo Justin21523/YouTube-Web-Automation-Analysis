@@ -15,6 +15,7 @@ from .video_analytics import VideoAnalytics
 from .playlist import Playlist, playlist_videos
 from .task_execution import TaskExecution, TaskStatus
 from .caption import Caption, CaptionSegment, CaptionFormat, CaptionType
+from .user import User, UserRole, UserStatus, RefreshToken
 from .vqa import (
     VideoFrame,
     FrameAnalysis,
@@ -59,6 +60,11 @@ __all__ = [
     "CaptionSegment",
     "CaptionFormat",
     "CaptionType",
+    # User models
+    "User",
+    "UserRole",
+    "UserStatus",
+    "RefreshToken",
     # VQA models
     "VideoFrame",
     "FrameAnalysis",
