@@ -17,6 +17,11 @@ from src.services.exceptions import (
     ExternalServiceError,
     ProcessingError,
 )
+from src.services.llm_client import (
+    get_llm_client,
+    Message,
+    BaseLLMClient,
+)
 
 from src.infrastructure.repositories.chat_repository import (
     ChatSessionRepository,
@@ -805,6 +810,40 @@ Use this context to provide relevant and specific responses about the video."""
 
         return messages
 
+    def _get_llm_provider(self, model_type: str) -> tuple[str, str]:
+        """
+        Determine LLM provider and model from model_type string
+
+        Returns:
+            (provider, model) tuple
+        """
+        model_type_lower = model_type.lower()
+
+        # OpenAI models
+        if any(x in model_type_lower for x in ["gpt-4", "gpt-3.5", "gpt4", "gpt35"]):
+            if "gpt-4" in model_type_lower or "gpt4" in model_type_lower:
+                return ("openai", "gpt-4o-mini")
+            return ("openai", "gpt-3.5-turbo")
+
+        # LLMVendor models
+        if any(x in model_type_lower for x in ["llm_provider", "llm_vendor"]):
+            if "opus" in model_type_lower:
+                return ("llm_vendor", "llm_provider-3-opus-20240229")
+            if "sonnet" in model_type_lower:
+                return ("llm_vendor", "llm_provider-3-sonnet-20240229")
+            return ("llm_vendor", "llm_provider-3-haiku-20240307")
+
+        # Ollama/local models
+        if any(x in model_type_lower for x in ["llama", "mistral", "ollama", "local"]):
+            if "llama" in model_type_lower:
+                return ("ollama", "llama3.2")
+            if "mistral" in model_type_lower:
+                return ("ollama", "mistral")
+            return ("ollama", "llama3.2")
+
+        # Default to auto-detection
+        return (None, None)
+
     async def _get_llm_response(
         self,
         messages: List[Dict[str, str]],
@@ -813,35 +852,39 @@ Use this context to provide relevant and specific responses about the video."""
         max_tokens: int = 2000,
     ) -> Dict[str, Any]:
         """
-        Get response from LLM
+        Get response from LLM using the unified LLM client
 
-        This is a placeholder implementation. In production, integrate with:
-        - OpenAI API (GPT-4, GPT-3.5)
-        - LLMVendor API (LLMProvider)
-        - Local models (Ollama, vLLM)
+        Supports OpenAI, LLMVendor LLMProvider, and Ollama (local models)
         """
         try:
-            # Placeholder: Echo response for development
-            # Replace with actual LLM integration
+            # Determine provider and model
+            provider, model = self._get_llm_provider(model_type)
 
-            user_message = messages[-1]["content"] if messages else ""
+            # Get LLM client
+            if provider:
+                llm_client = get_llm_client(provider=provider, model=model)
+            else:
+                # Auto-detect based on available API keys
+                llm_client = get_llm_client()
 
-            # Simple mock response
-            response_content = f"""I understand you're asking about: "{user_message[:100]}..."
+            # Convert messages to Message objects
+            llm_messages = [
+                Message(role=msg["role"], content=msg["content"])
+                for msg in messages
+            ]
 
-This is a placeholder response. To enable real AI responses, please configure one of the following:
-
-1. **OpenAI API**: Set OPENAI_API_KEY in environment
-2. **LLMVendor API**: Set LLM_VENDOR_API_KEY in environment
-3. **Local Model**: Configure Ollama or similar local LLM
-
-Once configured, the chat service will provide intelligent responses based on the conversation context."""
+            # Get response
+            response = await llm_client.chat(
+                messages=llm_messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
 
             return {
-                "content": response_content,
-                "tokens": self._estimate_tokens(response_content),
-                "model": f"{model_type} (placeholder)",
-                "finish_reason": "stop",
+                "content": response.content,
+                "tokens": response.usage.get("completion_tokens", self._estimate_tokens(response.content)),
+                "model": response.model,
+                "finish_reason": response.finish_reason or "stop",
             }
 
         except Exception as e:

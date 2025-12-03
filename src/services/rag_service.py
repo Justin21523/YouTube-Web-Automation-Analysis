@@ -9,6 +9,7 @@ from datetime import datetime
 import uuid
 import logging
 import struct
+import os
 from pathlib import Path
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,6 +20,7 @@ from src.services.exceptions import (
     ExternalServiceError,
     ProcessingError,
 )
+from src.services.llm_client import get_llm_client, Message
 
 from src.infrastructure.repositories.rag_repository import (
     DocumentChunkRepository,
@@ -473,30 +475,93 @@ class RAGService(BaseService):
         model_type: str = EmbeddingModelType.OPENAI_3_SMALL.value,
     ) -> List[float]:
         """
-        Get embedding for text
+        Get embedding for text using OpenAI Embeddings API or local models
 
-        This is a placeholder implementation. In production, integrate with:
-        - OpenAI Embeddings API
-        - Sentence Transformers
-        - Local embedding models
+        Supports:
+        - OpenAI Embeddings API (text-embedding-3-small, text-embedding-3-large)
+        - Sentence Transformers (via local model)
+        - Ollama embeddings (via local model)
         """
-        # Placeholder: Generate random embedding for development
-        # Replace with actual embedding API call
+        import httpx
+
+        # Determine embedding provider and model
+        model_lower = model_type.lower()
+
+        # OpenAI Embeddings
+        if "openai" in model_lower or "text-embedding" in model_lower:
+            api_key = os.getenv("OPENAI_API_KEY")
+            if not api_key:
+                logger.warning("OpenAI API key not set, using random embeddings")
+                return self._generate_random_embedding(1536)
+
+            # Use OpenAI Embeddings API
+            model = "text-embedding-3-small"
+            if "large" in model_lower:
+                model = "text-embedding-3-large"
+            elif "ada" in model_lower:
+                model = "text-embedding-ada-002"
+
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    response = await client.post(
+                        "https://api.openai.com/v1/embeddings",
+                        headers={
+                            "Authorization": f"Bearer {api_key}",
+                            "Content-Type": "application/json",
+                        },
+                        json={
+                            "model": model,
+                            "input": text[:8000],  # Limit input length
+                        },
+                    )
+                    response.raise_for_status()
+                    result = response.json()
+                    return result["data"][0]["embedding"]
+            except Exception as e:
+                logger.error(f"OpenAI embedding failed: {e}")
+                raise ProcessingError(f"Failed to generate embedding: {e}")
+
+        # Ollama embeddings
+        elif "ollama" in model_lower or "nomic" in model_lower or "mxbai" in model_lower:
+            ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+            embed_model = "nomic-embed-text"
+            if "mxbai" in model_lower:
+                embed_model = "mxbai-embed-large"
+
+            try:
+                async with httpx.AsyncClient(timeout=60.0) as client:
+                    response = await client.post(
+                        f"{ollama_host}/api/embeddings",
+                        json={
+                            "model": embed_model,
+                            "prompt": text[:4000],
+                        },
+                    )
+                    response.raise_for_status()
+                    result = response.json()
+                    return result["embedding"]
+            except Exception as e:
+                logger.warning(f"Ollama embedding failed: {e}, using random embeddings")
+                return self._generate_random_embedding(768)
+
+        # BGE or sentence-transformers (would need local model)
+        elif "bge" in model_lower or "sentence-transformer" in model_lower:
+            # Fallback to random for now - would need sentence-transformers library
+            dimension = 384 if "small" in model_lower else 1024
+            logger.warning(f"Local embedding model not loaded, using random embeddings")
+            return self._generate_random_embedding(dimension)
+
+        # Default: random embedding (development fallback)
+        else:
+            logger.warning(f"Unknown embedding model {model_type}, using random embeddings")
+            return self._generate_random_embedding(1536)
+
+    def _generate_random_embedding(self, dimension: int) -> List[float]:
+        """Generate a random normalized embedding vector for development"""
         import random
-
-        dimension = 1536  # OpenAI default
-
-        if "bge" in model_type.lower():
-            dimension = 384 if "small" in model_type.lower() else 1024
-        elif "sentence-transformer" in model_type.lower():
-            dimension = 768
-
-        # Normalize random vector
         embedding = [random.gauss(0, 1) for _ in range(dimension)]
         norm = sum(x * x for x in embedding) ** 0.5
-        embedding = [x / norm for x in embedding]
-
-        return embedding
+        return [x / norm for x in embedding]
 
     # ========================================================================
     # Vector Search
@@ -722,6 +787,31 @@ class RAGService(BaseService):
             logger.error(f"RAG generation failed: {e}")
             raise ProcessingError(f"RAG generation failed: {e}")
 
+    def _get_llm_provider(self, model_type: str) -> tuple:
+        """Determine LLM provider and model from model_type string"""
+        model_type_lower = model_type.lower()
+
+        if any(x in model_type_lower for x in ["gpt-4", "gpt-3.5", "gpt4", "gpt35"]):
+            if "gpt-4" in model_type_lower or "gpt4" in model_type_lower:
+                return ("openai", "gpt-4o-mini")
+            return ("openai", "gpt-3.5-turbo")
+
+        if any(x in model_type_lower for x in ["llm_provider", "llm_vendor"]):
+            if "opus" in model_type_lower:
+                return ("llm_vendor", "llm_provider-3-opus-20240229")
+            if "sonnet" in model_type_lower:
+                return ("llm_vendor", "llm_provider-3-sonnet-20240229")
+            return ("llm_vendor", "llm_provider-3-haiku-20240307")
+
+        if any(x in model_type_lower for x in ["llama", "mistral", "ollama"]):
+            if "llama" in model_type_lower:
+                return ("ollama", "llama3.2")
+            if "mistral" in model_type_lower:
+                return ("ollama", "mistral")
+            return ("ollama", "llama3.2")
+
+        return (None, None)
+
     async def _generate_with_context(
         self,
         query: str,
@@ -731,35 +821,65 @@ class RAGService(BaseService):
         """
         Generate response with context using LLM
 
-        This is a placeholder implementation.
+        Uses the unified LLM client to support OpenAI, LLMVendor, and Ollama
         """
-        # Build prompt
-        prompt = f"""Answer the following question based on the provided context.
-If the context doesn't contain relevant information, say so.
+        # Build system prompt for RAG
+        system_prompt = """You are a helpful assistant that answers questions based on the provided context from video content.
+Your answers should be:
+1. Accurate and based on the provided context
+2. Clear and well-organized
+3. Include relevant details from the sources
+
+If the context doesn't contain enough information to answer the question, acknowledge this and explain what information is available.
+Always indicate which source(s) you're drawing from when possible."""
+
+        # Build user prompt with context
+        user_prompt = f"""Based on the following context from video content, please answer the question.
 
 Context:
 {context}
 
 Question: {query}
 
-Answer:"""
+Please provide a comprehensive answer based on the context above."""
 
-        # Placeholder response
-        response_content = f"""Based on the provided context, here's what I found:
+        try:
+            # Get LLM provider
+            provider, model = self._get_llm_provider(model_type)
 
-This is a placeholder response. To enable real RAG-based generation, configure one of:
+            # Get client
+            if provider:
+                llm_client = get_llm_client(provider=provider, model=model)
+            else:
+                llm_client = get_llm_client()
 
-1. **OpenAI API**: Set OPENAI_API_KEY
-2. **LLMVendor API**: Set LLM_VENDOR_API_KEY
-3. **Local Model**: Configure Ollama or vLLM
+            # Create messages
+            messages = [
+                Message(role="system", content=system_prompt),
+                Message(role="user", content=user_prompt),
+            ]
 
-The search found {context.count('[Source')} relevant sources that would be used to generate a real answer."""
+            # Get response
+            response = await llm_client.chat(
+                messages=messages,
+                temperature=0.7,
+                max_tokens=2048,
+            )
 
-        return {
-            "content": response_content,
-            "tokens": len(response_content) // 4,
-            "model": model_type,
-        }
+            return {
+                "content": response.content,
+                "tokens": response.usage.get("completion_tokens", len(response.content) // 4),
+                "model": response.model,
+            }
+
+        except Exception as e:
+            logger.error(f"RAG generation failed: {e}")
+            # Fallback response
+            return {
+                "content": f"I apologize, but I encountered an error while generating a response. The search found {context.count('[Source')} relevant sources. Error: {str(e)}",
+                "tokens": 50,
+                "model": model_type,
+            }
 
     # ========================================================================
     # Statistics

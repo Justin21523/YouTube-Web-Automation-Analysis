@@ -8,6 +8,7 @@ from typing import Optional, List, Dict, Any, Tuple
 from datetime import datetime
 import uuid
 import os
+import base64
 import logging
 from pathlib import Path
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +20,7 @@ from src.services.exceptions import (
     ExternalServiceError,
     ProcessingError,
 )
+from src.services.llm_client import get_llm_client, Message
 
 from src.infrastructure.repositories.vqa_repository import (
     VideoFrameRepository,
@@ -485,33 +487,202 @@ class VQAService(BaseService):
         model_type: str,
     ) -> Dict[str, Any]:
         """
-        Analyze image using VQA model
+        Analyze image using vision-capable LLM or local VQA model
 
-        This is a placeholder - replace with actual model inference
+        Supports:
+        - OpenAI GPT-4 Vision
+        - LLMVendor LLMProvider Vision
+        - Ollama with LLaVA
         """
-        # Placeholder implementation
-        # In production, this would call the actual VQA model
-
+        import httpx
         from PIL import Image
 
-        # Basic image analysis
+        # Get image dimensions
         with Image.open(image_path) as img:
             width, height = img.size
 
-        # Generate placeholder results
-        # Replace with actual model inference
-        result = {
-            "caption": f"An image frame ({width}x{height})",
-            "description": "This is a placeholder description. Replace with actual VQA model output.",
+        # Read and encode image
+        with open(image_path, "rb") as f:
+            image_data = base64.b64encode(f.read()).decode("utf-8")
+
+        # Determine image mime type
+        ext = os.path.splitext(image_path)[1].lower()
+        mime_type = {
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".png": "image/png",
+            ".gif": "image/gif",
+            ".webp": "image/webp",
+        }.get(ext, "image/jpeg")
+
+        model_lower = model_type.lower()
+
+        # OpenAI GPT-4 Vision
+        if "gpt" in model_lower or "openai" in model_lower:
+            api_key = os.getenv("OPENAI_API_KEY")
+            if api_key:
+                try:
+                    async with httpx.AsyncClient(timeout=60.0) as client:
+                        response = await client.post(
+                            "https://api.openai.com/v1/chat/completions",
+                            headers={
+                                "Authorization": f"Bearer {api_key}",
+                                "Content-Type": "application/json",
+                            },
+                            json={
+                                "model": "gpt-4o-mini",
+                                "messages": [
+                                    {
+                                        "role": "user",
+                                        "content": [
+                                            {
+                                                "type": "text",
+                                                "text": "Analyze this video frame. Provide: 1) A brief caption, 2) A detailed description, 3) List of visible objects, 4) Any text visible in the image, 5) Scene type (indoor/outdoor/presentation/etc). Format as JSON.",
+                                            },
+                                            {
+                                                "type": "image_url",
+                                                "image_url": {
+                                                    "url": f"data:{mime_type};base64,{image_data}",
+                                                },
+                                            },
+                                        ],
+                                    }
+                                ],
+                                "max_tokens": 1000,
+                            },
+                        )
+                        response.raise_for_status()
+                        result = response.json()
+                        content = result["choices"][0]["message"]["content"]
+
+                        # Parse the response
+                        return self._parse_vision_response(content, model_type, width, height)
+                except Exception as e:
+                    logger.error(f"OpenAI Vision analysis failed: {e}")
+
+        # LLMVendor LLMProvider Vision
+        elif "llm_provider" in model_lower or "llm_vendor" in model_lower:
+            api_key = os.getenv("LLM_VENDOR_API_KEY")
+            if api_key:
+                try:
+                    async with httpx.AsyncClient(timeout=60.0) as client:
+                        response = await client.post(
+                            "https://api.llm_vendor.com/v1/messages",
+                            headers={
+                                "x-api-key": api_key,
+                                "Content-Type": "application/json",
+                                "llm_vendor-version": "2023-06-01",
+                            },
+                            json={
+                                "model": "llm_provider-3-haiku-20240307",
+                                "max_tokens": 1000,
+                                "messages": [
+                                    {
+                                        "role": "user",
+                                        "content": [
+                                            {
+                                                "type": "image",
+                                                "source": {
+                                                    "type": "base64",
+                                                    "media_type": mime_type,
+                                                    "data": image_data,
+                                                },
+                                            },
+                                            {
+                                                "type": "text",
+                                                "text": "Analyze this video frame. Provide: 1) A brief caption, 2) A detailed description, 3) List of visible objects, 4) Any text visible in the image, 5) Scene type. Format as JSON.",
+                                            },
+                                        ],
+                                    }
+                                ],
+                            },
+                        )
+                        response.raise_for_status()
+                        result = response.json()
+                        content = result["content"][0]["text"]
+
+                        return self._parse_vision_response(content, model_type, width, height)
+                except Exception as e:
+                    logger.error(f"LLMProvider Vision analysis failed: {e}")
+
+        # Ollama with LLaVA
+        elif "llava" in model_lower or "ollama" in model_lower or "blip" in model_lower:
+            ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+            try:
+                async with httpx.AsyncClient(timeout=120.0) as client:
+                    response = await client.post(
+                        f"{ollama_host}/api/generate",
+                        json={
+                            "model": "llava",
+                            "prompt": "Analyze this video frame. Describe what you see, list objects, identify the scene type, and note any text visible.",
+                            "images": [image_data],
+                            "stream": False,
+                        },
+                    )
+                    response.raise_for_status()
+                    result = response.json()
+                    content = result.get("response", "")
+
+                    return self._parse_vision_response(content, model_type, width, height)
+            except Exception as e:
+                logger.warning(f"Ollama LLaVA analysis failed: {e}")
+
+        # Fallback to basic analysis
+        return {
+            "caption": f"Video frame ({width}x{height})",
+            "description": "Vision model not available. Configure OPENAI_API_KEY, LLM_VENDOR_API_KEY, or Ollama with LLaVA for image analysis.",
             "objects": [],
             "text": [],
             "scene_type": "unknown",
             "scene_confidence": 0.0,
             "tags": ["frame", "video"],
-            "raw": {"model": model_type, "status": "placeholder"},
+            "raw": {"model": model_type, "status": "fallback", "width": width, "height": height},
         }
 
-        return result
+    def _parse_vision_response(
+        self,
+        content: str,
+        model_type: str,
+        width: int,
+        height: int,
+    ) -> Dict[str, Any]:
+        """Parse vision model response into structured format"""
+        import json
+        import re
+
+        # Try to parse as JSON first
+        try:
+            # Find JSON in the response
+            json_match = re.search(r'\{[\s\S]*\}', content)
+            if json_match:
+                data = json.loads(json_match.group())
+                return {
+                    "caption": data.get("caption", ""),
+                    "description": data.get("description", content[:500]),
+                    "objects": data.get("objects", []),
+                    "text": data.get("text", []),
+                    "scene_type": data.get("scene_type", "unknown"),
+                    "scene_confidence": data.get("confidence", 0.8),
+                    "tags": data.get("tags", []),
+                    "raw": {"model": model_type, "response": content},
+                }
+        except json.JSONDecodeError:
+            pass
+
+        # Fallback: extract from plain text
+        lines = content.strip().split('\n')
+        caption = lines[0] if lines else ""
+
+        return {
+            "caption": caption[:200],
+            "description": content[:1000],
+            "objects": [],
+            "text": [],
+            "scene_type": "unknown",
+            "scene_confidence": 0.7,
+            "tags": ["analyzed"],
+            "raw": {"model": model_type, "response": content, "width": width, "height": height},
+        }
 
     # ========================================================================
     # VQA Session Operations
@@ -692,38 +863,213 @@ class VQAService(BaseService):
         model_type: str,
     ) -> Dict[str, Any]:
         """
-        Generate answer using VQA model
+        Generate answer using vision-capable LLM
 
-        This is a placeholder - replace with actual model inference
+        Supports:
+        - OpenAI GPT-4 Vision
+        - LLMVendor LLMProvider Vision
+        - Ollama with LLaVA
         """
-        # Placeholder implementation
-        # In production, this would:
-        # 1. Load frame images
-        # 2. Build context from previous Q&A
-        # 3. Call VQA model with question + images + context
-        # 4. Return answer with confidence
+        import httpx
 
-        # Build context string
+        # Build context from previous Q&A
         context_str = ""
-        for q in context:
-            context_str += f"Q: {q.question}\nA: {q.answer}\n\n"
+        if context:
+            context_str = "Previous conversation:\n"
+            for q in context:
+                context_str += f"Q: {q.question}\nA: {q.answer}\n\n"
 
-        # Placeholder answer
-        answer = (
-            f"Based on analyzing the video frames, here's my response to '{question}': "
-            f"This is a placeholder answer. Replace with actual VQA model output. "
-            f"Number of frames analyzed: {len(frames)}."
-        )
+        # Load and encode frame images
+        encoded_images = []
+        for frame in frames[:3]:  # Limit to 3 frames
+            if frame.file_path and os.path.exists(frame.file_path):
+                try:
+                    with open(frame.file_path, "rb") as f:
+                        image_data = base64.b64encode(f.read()).decode("utf-8")
+                        ext = os.path.splitext(frame.file_path)[1].lower()
+                        mime_type = {
+                            ".jpg": "image/jpeg",
+                            ".jpeg": "image/jpeg",
+                            ".png": "image/png",
+                        }.get(ext, "image/jpeg")
+                        encoded_images.append({
+                            "data": image_data,
+                            "mime_type": mime_type,
+                            "timestamp": frame.timestamp,
+                        })
+                except Exception as e:
+                    logger.warning(f"Failed to load frame {frame.id}: {e}")
 
-        return {
-            "answer": answer,
-            "confidence": 0.5,  # Placeholder confidence
-            "evidence": {
-                "frames_analyzed": len(frames),
-                "context_turns": len(context),
-                "model": model_type,
-            },
-        }
+        model_lower = model_type.lower()
+
+        # OpenAI GPT-4 Vision
+        if "gpt" in model_lower or "openai" in model_lower:
+            api_key = os.getenv("OPENAI_API_KEY")
+            if api_key and encoded_images:
+                try:
+                    # Build message content with images
+                    content = [
+                        {
+                            "type": "text",
+                            "text": f"{context_str}Based on these video frames, please answer: {question}",
+                        }
+                    ]
+                    for img in encoded_images:
+                        content.append({
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{img['mime_type']};base64,{img['data']}",
+                            },
+                        })
+
+                    async with httpx.AsyncClient(timeout=60.0) as client:
+                        response = await client.post(
+                            "https://api.openai.com/v1/chat/completions",
+                            headers={
+                                "Authorization": f"Bearer {api_key}",
+                                "Content-Type": "application/json",
+                            },
+                            json={
+                                "model": "gpt-4o-mini",
+                                "messages": [{"role": "user", "content": content}],
+                                "max_tokens": 1000,
+                            },
+                        )
+                        response.raise_for_status()
+                        result = response.json()
+                        answer = result["choices"][0]["message"]["content"]
+
+                        return {
+                            "answer": answer,
+                            "confidence": 0.85,
+                            "evidence": {
+                                "frames_analyzed": len(encoded_images),
+                                "context_turns": len(context),
+                                "model": "gpt-4o-mini",
+                            },
+                        }
+                except Exception as e:
+                    logger.error(f"OpenAI VQA failed: {e}")
+
+        # LLMVendor LLMProvider Vision
+        elif "llm_provider" in model_lower or "llm_vendor" in model_lower:
+            api_key = os.getenv("LLM_VENDOR_API_KEY")
+            if api_key and encoded_images:
+                try:
+                    # Build content with images
+                    content = []
+                    for img in encoded_images:
+                        content.append({
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": img["mime_type"],
+                                "data": img["data"],
+                            },
+                        })
+                    content.append({
+                        "type": "text",
+                        "text": f"{context_str}Based on these video frames, please answer: {question}",
+                    })
+
+                    async with httpx.AsyncClient(timeout=60.0) as client:
+                        response = await client.post(
+                            "https://api.llm_vendor.com/v1/messages",
+                            headers={
+                                "x-api-key": api_key,
+                                "Content-Type": "application/json",
+                                "llm_vendor-version": "2023-06-01",
+                            },
+                            json={
+                                "model": "llm_provider-3-haiku-20240307",
+                                "max_tokens": 1000,
+                                "messages": [{"role": "user", "content": content}],
+                            },
+                        )
+                        response.raise_for_status()
+                        result = response.json()
+                        answer = result["content"][0]["text"]
+
+                        return {
+                            "answer": answer,
+                            "confidence": 0.85,
+                            "evidence": {
+                                "frames_analyzed": len(encoded_images),
+                                "context_turns": len(context),
+                                "model": "llm_provider-3-haiku",
+                            },
+                        }
+                except Exception as e:
+                    logger.error(f"LLMProvider VQA failed: {e}")
+
+        # Ollama with LLaVA
+        elif encoded_images:
+            ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+            try:
+                async with httpx.AsyncClient(timeout=120.0) as client:
+                    response = await client.post(
+                        f"{ollama_host}/api/generate",
+                        json={
+                            "model": "llava",
+                            "prompt": f"{context_str}Based on this video frame, please answer: {question}",
+                            "images": [encoded_images[0]["data"]],
+                            "stream": False,
+                        },
+                    )
+                    response.raise_for_status()
+                    result = response.json()
+                    answer = result.get("response", "")
+
+                    return {
+                        "answer": answer,
+                        "confidence": 0.7,
+                        "evidence": {
+                            "frames_analyzed": 1,
+                            "context_turns": len(context),
+                            "model": "llava",
+                        },
+                    }
+            except Exception as e:
+                logger.warning(f"Ollama LLaVA VQA failed: {e}")
+
+        # Fallback: Use text-only LLM with frame analysis descriptions
+        try:
+            llm_client = get_llm_client()
+            prompt = f"""{context_str}
+The user is asking about video frames. Number of frames available: {len(frames)}.
+Frame timestamps: {[f.timestamp for f in frames]}
+
+Question: {question}
+
+Note: Vision model not available. Please provide a general response based on the context."""
+
+            response = await llm_client.generate(
+                prompt=prompt,
+                system_prompt="You are a helpful video analysis assistant. Answer questions about video content.",
+            )
+
+            return {
+                "answer": response.content,
+                "confidence": 0.5,
+                "evidence": {
+                    "frames_analyzed": len(frames),
+                    "context_turns": len(context),
+                    "model": response.model,
+                    "note": "Vision model not available, using text-only fallback",
+                },
+            }
+        except Exception as e:
+            logger.error(f"VQA generation failed: {e}")
+            return {
+                "answer": f"I was unable to analyze the video frames. Please ensure a vision-capable model is configured. Error: {str(e)}",
+                "confidence": 0.0,
+                "evidence": {
+                    "frames_analyzed": len(frames),
+                    "context_turns": len(context),
+                    "model": model_type,
+                    "error": str(e),
+                },
+            }
 
     def _classify_question(self, question: str) -> str:
         """Classify question type"""

@@ -77,7 +77,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         logger.error(f"❌ Database initialization failed: {e}")
         raise
 
-    # 4. Print startup summary
+    # 4. Start WebSocket broadcaster
+    logger.info("🔌 Starting WebSocket broadcaster...")
+    try:
+        from src.api.routers.websocket_router import start_broadcaster
+        await start_broadcaster()
+        logger.info("✅ WebSocket broadcaster started")
+    except Exception as e:
+        logger.warning(f"⚠️ WebSocket broadcaster failed to start: {e}")
+
+    # 5. Print startup summary
     _print_startup_summary(config, cache)
 
     logger.info("✅ Application startup complete!\n")
@@ -86,6 +95,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
 
     # ========== SHUTDOWN ==========
     logger.info("\n🛑 Shutting down application...")
+
+    # Stop WebSocket broadcaster
+    logger.info("🔌 Stopping WebSocket broadcaster...")
+    try:
+        from src.api.routers.websocket_router import stop_broadcaster
+        await stop_broadcaster()
+    except Exception as e:
+        logger.warning(f"⚠️ Error stopping WebSocket broadcaster: {e}")
 
     # Close database connections
     logger.info("🔌 Closing database connections...")
@@ -299,16 +316,30 @@ def _register_routers(app: FastAPI, config) -> None:
     app.include_router(pages_router)
     logger.info("  🖥️  Pages router registered")
 
+    # Register WebSocket router
+    from src.api.routers.websocket_router import router as ws_router
+    app.include_router(ws_router)
+    logger.info("  🔌 WebSocket router registered")
+
     # Register core API routers
     from src.api.routers.task_router import router as task_router
     from src.api.routers.health_router import router as health_router, set_startup_time
+    from src.api.routers.video_router import router as video_router
+    from src.api.routers.channel_router import router as channel_router
+    from src.api.routers.analytics_router import router as analytics_router
 
     app.include_router(task_router)
     app.include_router(health_router)
+    app.include_router(video_router)
+    app.include_router(channel_router)
+    app.include_router(analytics_router)
 
     # Set startup time for health checks
     set_startup_time()
     logger.info("  🏥 Health router registered")
+    logger.info("  📹 Video router registered")
+    logger.info("  📺 Channel router registered")
+    logger.info("  📊 Analytics router registered")
 
     # Register feature routers based on config
     if config.features.enable_caption:
