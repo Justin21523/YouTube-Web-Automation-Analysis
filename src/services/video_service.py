@@ -20,7 +20,7 @@ from src.services.exceptions import (
 from src.infrastructure.clients.youtube_api import YouTubeAPIClient
 from src.infrastructure.repositories.video_repository import VideoRepository
 from src.infrastructure.repositories.channel_repository import ChannelRepository
-from src.infrastructure.database.models import Video, VideoStatus
+from src.app.models import Video, VideoStatus
 
 from src.api.schemas import (
     VideoCreateRequest,

@@ -222,6 +222,38 @@ class VideoRepository(BaseRepository[Video]):
             logger.error(f"❌ Failed to get most engaged videos: {e}")
             raise
 
+    async def list_recent(
+        self,
+        since: Optional[datetime] = None,
+        limit: int = 100,
+        channel_id: Optional[str] = None,
+    ) -> List[Video]:
+        """
+        Get recently updated videos
+
+        Args:
+            since: Cutoff datetime (videos updated after this time)
+            limit: Max results
+            channel_id: Filter by channel (optional)
+
+        Returns:
+            List of recently updated videos
+        """
+        try:
+            query = select(Video).order_by(desc(Video.last_updated_at)).limit(limit)
+
+            if since:
+                query = query.where(Video.last_updated_at >= since)
+
+            if channel_id:
+                query = query.where(Video.channel_id == channel_id)
+
+            result = await self.session.execute(query)
+            return list(result.scalars().all())
+        except Exception as e:
+            logger.error(f"❌ Failed to get recent videos: {e}")
+            raise
+
     # ========================================================================
     # Search & Filtering
     # ========================================================================
@@ -507,10 +539,11 @@ class VideoRepository(BaseRepository[Video]):
             existing_video = await self.get_by_id(video_id)
 
             if existing_video:
-                # Update existing video
-                video_data["last_updated_at"] = datetime.utcnow()
-                video_data["scrape_count"] = existing_video.scrape_count + 1
-                updated_video = await self.update(video_id, **video_data)
+                # Update existing video - remove id from data to avoid conflict
+                update_data = {k: v for k, v in video_data.items() if k != "id"}
+                update_data["last_updated_at"] = datetime.utcnow()
+                update_data["scrape_count"] = existing_video.scrape_count + 1
+                updated_video = await self.update(video_id, **update_data)
                 logger.info(f"✅ Updated video: {video_id}")
                 return updated_video
             else:

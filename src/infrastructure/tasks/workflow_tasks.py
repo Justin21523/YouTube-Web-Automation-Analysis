@@ -144,8 +144,7 @@ def full_video_analysis(
             update_task_status(self.request.id, "failed", error_message=str(e))
             raise
 
-    loop = asyncio.get_event_loop()
-    return loop.run_until_complete(_workflow())
+    return asyncio.run(_workflow())
 
 
 @celery_app.task(
@@ -256,8 +255,7 @@ def full_channel_analysis(
             update_task_status(self.request.id, "failed", error_message=str(e))
             raise
 
-    loop = asyncio.get_event_loop()
-    return loop.run_until_complete(_workflow())
+    return asyncio.run(_workflow())
 
 
 @celery_app.task(
@@ -341,8 +339,7 @@ def bulk_video_scraping(
             update_task_status(self.request.id, "failed", error_message=str(e))
             raise
 
-    loop = asyncio.get_event_loop()
-    return loop.run_until_complete(_bulk_scrape())
+    return asyncio.run(_bulk_scrape())
 
 
 @celery_app.task(
@@ -443,5 +440,4 @@ def trending_videos_analysis(
             update_task_status(self.request.id, "failed", error_message=str(e))
             raise
 
-    loop = asyncio.get_event_loop()
-    return loop.run_until_complete(_trending())
+    return asyncio.run(_trending())

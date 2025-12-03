@@ -1,0 +1,244 @@
+# monitoring/alerts/application.yml
+# Application Alert Rules for YouTube Web Automation Analysis
+# ============================================================================
+
+groups:
+  # ==========================================================================
+  # Application Health Alerts
+  # ==========================================================================
+  - name: application_health
+    rules:
+      # API Health Check Failed
+      - alert: APIHealthCheckFailed
+        expr: up{job="fastapi"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "API health check failed"
+          description: "FastAPI application is not responding to health checks for more than 1 minute."
+
+      # High API Response Time
+      - alert: HighAPIResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="fastapi"}[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High API response time"
+          description: "95th percentile response time is above 2 seconds."
+
+      # High Error Rate
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is above 5% for the last 5 minutes."
+
+  # ==========================================================================
+  # Database Alerts
+  # ==========================================================================
+  - name: database_health
+    rules:
+      # PostgreSQL Down
+      - alert: PostgreSQLDown
+        expr: pg_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "PostgreSQL database is not responding."
+
+      # High Database Connections
+      - alert: HighDatabaseConnections
+        expr: pg_stat_activity_count > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High number of database connections"
+          description: "Database connection count is above 80."
+
+      # Database Connection Pool Exhausted
+      - alert: DatabaseConnectionPoolExhausted
+        expr: pg_stat_activity_count >= 100
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Database connection pool exhausted"
+          description: "Database connection pool is at maximum capacity."
+
+  # ==========================================================================
+  # Redis/Cache Alerts
+  # ==========================================================================
+  - name: redis_health
+    rules:
+      # Redis Down
+      - alert: RedisDown
+        expr: redis_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis is down"
+          description: "Redis cache is not responding."
+
+      # Redis Memory Usage High
+      - alert: RedisMemoryHigh
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis memory usage high"
+          description: "Redis memory usage is above 80%."
+
+      # Redis Memory Critical
+      - alert: RedisMemoryCritical
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.95
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis memory critical"
+          description: "Redis memory usage is above 95%."
+
+  # ==========================================================================
+  # Celery Worker Alerts
+  # ==========================================================================
+  - name: celery_health
+    rules:
+      # No Active Celery Workers
+      - alert: NoActiveCeleryWorkers
+        expr: flower_worker_number_of_currently_executing_tasks == 0 and flower_worker_online == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No active Celery workers"
+          description: "There are no active Celery workers processing tasks."
+
+      # Celery Task Queue Growing
+      - alert: CeleryTaskQueueGrowing
+        expr: rate(celery_task_received_total[5m]) > rate(celery_task_succeeded_total[5m]) * 1.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Celery task queue is growing"
+          description: "Tasks are being received faster than they are being processed."
+
+      # High Celery Task Failure Rate
+      - alert: HighCeleryTaskFailureRate
+        expr: rate(celery_task_failed_total[5m]) / rate(celery_task_received_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High Celery task failure rate"
+          description: "More than 10% of Celery tasks are failing."
+
+  # ==========================================================================
+  # System Resource Alerts
+  # ==========================================================================
+  - name: system_resources
+    rules:
+      # High CPU Usage
+      - alert: HighCPUUsage
+        expr: 100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is above 80% for more than 5 minutes."
+
+      # Critical CPU Usage
+      - alert: CriticalCPUUsage
+        expr: 100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 95
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical CPU usage"
+          description: "CPU usage is above 95% for more than 2 minutes."
+
+      # High Memory Usage
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is above 80%."
+
+      # Critical Memory Usage
+      - alert: CriticalMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 95
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical memory usage"
+          description: "Memory usage is above 95%."
+
+      # Low Disk Space
+      - alert: LowDiskSpace
+        expr: (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}) * 100 < 20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low disk space"
+          description: "Disk space is below 20%."
+
+      # Critical Disk Space
+      - alert: CriticalDiskSpace
+        expr: (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}) * 100 < 5
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical disk space"
+          description: "Disk space is below 5%."
+
+  # ==========================================================================
+  # YouTube API Alerts
+  # ==========================================================================
+  - name: youtube_api
+    rules:
+      # YouTube API Quota Warning
+      - alert: YouTubeAPIQuotaWarning
+        expr: youtube_api_quota_used > 8000
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "YouTube API quota warning"
+          description: "YouTube API quota usage is above 8000 units (80% of daily limit)."
+
+      # YouTube API Quota Critical
+      - alert: YouTubeAPIQuotaCritical
+        expr: youtube_api_quota_used > 9500
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "YouTube API quota critical"
+          description: "YouTube API quota usage is above 9500 units (95% of daily limit)."
+
+      # High YouTube API Error Rate
+      - alert: HighYouTubeAPIErrorRate
+        expr: rate(youtube_api_errors_total[5m]) / rate(youtube_api_requests_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High YouTube API error rate"
+          description: "YouTube API error rate is above 10%."

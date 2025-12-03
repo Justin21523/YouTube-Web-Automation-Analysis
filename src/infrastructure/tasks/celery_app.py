@@ -29,7 +29,7 @@ class DatabaseTask(Task):
     def db(self):
         """Get database session (lazy initialization)"""
         if self._db is None:
-            from src.app.database import db_manager
+            from src.infrastructure.database import db_manager
 
             self._db = db_manager
         return self._db
@@ -43,9 +43,24 @@ class DatabaseTask(Task):
 
     def after_return(self, status, retval, task_id, args, kwargs, einfo):
         """Cleanup after task execution"""
-        if self._db is not None:
-            # Close any open database connections
-            pass
+        import asyncio
+
+        if self._db is not None and self._db.is_initialized:
+            try:
+                # Close database connections asynchronously
+                asyncio.run(self._db.close())
+                logger.debug(f"Database connections closed for task {task_id}")
+            except RuntimeError:
+                # Event loop may already be closed
+                pass
+            except Exception as e:
+                logger.warning(f"Failed to close database connections: {e}")
+            finally:
+                self._db = None
+
+        # Clear cache reference
+        self._cache = None
+
         super().after_return(status, retval, task_id, args, kwargs, einfo)
 
 

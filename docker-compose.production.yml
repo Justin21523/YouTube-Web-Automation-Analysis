@@ -1,0 +1,346 @@
+version: "3.8"
+
+# ============================================================================
+# YouTube Web Automation Analysis - Production Docker Compose
+# ============================================================================
+# Usage:
+#   docker-compose -f docker-compose.production.yml up -d
+#   docker-compose -f docker-compose.production.yml logs -f
+#   docker-compose -f docker-compose.production.yml down
+# ============================================================================
+
+services:
+  # ==========================================================================
+  # Redis - Message Broker & Result Backend
+  # ==========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: yt_redis_prod
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 2gb
+      --maxmemory-policy allkeys-lru
+      --tcp-keepalive 300
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - yt_network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  # ==========================================================================
+  # PostgreSQL Database
+  # ==========================================================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: yt_postgres_prod
+    environment:
+      POSTGRES_USER: youtube_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-change_this_password}
+      POSTGRES_DB: youtube_automation
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U youtube_user -d youtube_automation"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - yt_network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+
+  # ==========================================================================
+  # Celery Worker - Task Execution
+  # ==========================================================================
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: yt_celery_worker_prod
+    command: >
+      celery -A src.infrastructure.tasks.celery_app worker
+      --loglevel=warning
+      --concurrency=8
+      --pool=prefork
+      --optimization=fair
+      --without-gossip
+      --without-mingle
+    env_file:
+      - .env.production
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - DB_URL=postgresql+asyncpg://youtube_user:${DB_PASSWORD:-change_this_password}@postgres:5432/youtube_automation
+    volumes:
+      - app_cache:/app/cache
+      - app_data:/app/data
+      - app_logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - yt_network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+      replicas: 2
+    healthcheck:
+      test: ["CMD", "celery", "-A", "src.infrastructure.tasks.celery_app", "inspect", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ==========================================================================
+  # Celery Beat - Scheduled Tasks
+  # ==========================================================================
+  celery_beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: yt_celery_beat_prod
+    command: >
+      celery -A src.infrastructure.tasks.celery_app beat
+      --loglevel=warning
+      --scheduler=celery.beat:PersistentScheduler
+      --schedule=/app/data/celerybeat-schedule
+    env_file:
+      - .env.production
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - DB_URL=postgresql+asyncpg://youtube_user:${DB_PASSWORD:-change_this_password}@postgres:5432/youtube_automation
+    volumes:
+      - app_cache:/app/cache
+      - app_data:/app/data
+      - app_logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - yt_network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # ==========================================================================
+  # Flower - Celery Monitoring UI
+  # ==========================================================================
+  flower:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: yt_flower_prod
+    command: >
+      celery -A src.infrastructure.tasks.celery_app flower
+      --port=5555
+      --basic_auth=${FLOWER_BASIC_AUTH:-admin:change_this_password}
+      --persistent=true
+      --db=/app/data/flower.db
+    env_file:
+      - .env.production
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    ports:
+      - "5555:5555"
+    volumes:
+      - app_data:/app/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - yt_network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # ==========================================================================
+  # FastAPI Application
+  # ==========================================================================
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: yt_api_prod
+    command: >
+      gunicorn src.app.main:app
+      --workers 4
+      --worker-class uvicorn.workers.UvicornWorker
+      --bind 0.0.0.0:8000
+      --timeout 120
+      --keep-alive 5
+      --max-requests 1000
+      --max-requests-jitter 50
+      --access-logfile /app/logs/access.log
+      --error-logfile /app/logs/error.log
+    env_file:
+      - .env.production
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - DB_URL=postgresql+asyncpg://youtube_user:${DB_PASSWORD:-change_this_password}@postgres:5432/youtube_automation
+    ports:
+      - "8000:8000"
+    volumes:
+      - app_cache:/app/cache
+      - app_data:/app/data
+      - app_logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - yt_network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+      replicas: 2
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ==========================================================================
+  # Nginx - Reverse Proxy & Load Balancer
+  # ==========================================================================
+  nginx:
+    image: nginx:alpine
+    container_name: yt_nginx_prod
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      - api
+    networks:
+      - yt_network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  # ==========================================================================
+  # Prometheus - Metrics Collection
+  # ==========================================================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: yt_prometheus_prod
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+    networks:
+      - yt_network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  # ==========================================================================
+  # Grafana - Metrics Visualization
+  # ==========================================================================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: yt_grafana_prod
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-change_this_password}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=https://your-domain.com/grafana
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
+    networks:
+      - yt_network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+# ============================================================================
+# Networks
+# ============================================================================
+networks:
+  yt_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# ============================================================================
+# Volumes
+# ============================================================================
+volumes:
+  redis_data:
+    driver: local
+  postgres_data:
+    driver: local
+  app_cache:
+    driver: local
+  app_data:
+    driver: local
+  app_logs:
+    driver: local
+  nginx_logs:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local

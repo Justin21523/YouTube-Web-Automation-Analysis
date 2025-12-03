@@ -47,8 +47,7 @@ def refresh_trending_videos() -> Dict[str, Any]:
             logger.error(f"Failed to refresh trending videos: {e}")
             return {"error": str(e)}
 
-    loop = asyncio.get_event_loop()
-    return loop.run_until_complete(_refresh())
+    return asyncio.run(_refresh())
 
 
 @celery_app.task(name="tasks.scheduled.update_all_channels")
@@ -99,8 +98,7 @@ def update_all_channels() -> Dict[str, Any]:
             logger.error(f"Failed to update channels: {e}")
             return {"error": str(e)}
 
-    loop = asyncio.get_event_loop()
-    return loop.run_until_complete(_update())
+    return asyncio.run(_update())
 
 
 @celery_app.task(name="tasks.scheduled.monitor_active_channels")
@@ -154,8 +152,7 @@ def monitor_active_channels() -> Dict[str, Any]:
             logger.error(f"Failed to monitor channels: {e}")
             return {"error": str(e)}
 
-    loop = asyncio.get_event_loop()
-    return loop.run_until_complete(_monitor())
+    return asyncio.run(_monitor())
 
 
 @celery_app.task(name="tasks.scheduled.cleanup_old_data")
@@ -177,14 +174,12 @@ def cleanup_old_data() -> Dict[str, Any]:
 
             # Cleanup old analytics snapshots (>90 days)
             async with db_manager.session() as session:
-                from src.infrastructure.repositories import VideoAnalyticsRepository
+                from src.infrastructure.repositories.analytics_repository import (
+                    AnalyticsRepository,
+                )
 
-                analytics_repo = VideoAnalyticsRepository(session)
-                cutoff_date = datetime.utcnow() - timedelta(days=90)
-
-                # This would need to be implemented in the repository
-                # analytics_deleted = await analytics_repo.delete_old_snapshots(cutoff_date)
-                analytics_deleted = 0  # Placeholder
+                analytics_repo = AnalyticsRepository(session)
+                analytics_deleted = await analytics_repo.delete_old_snapshots(days=90)
 
             logger.info(
                 f"✅ Cleanup complete: {tasks_deleted} tasks, {analytics_deleted} analytics"
@@ -200,8 +195,7 @@ def cleanup_old_data() -> Dict[str, Any]:
             logger.error(f"Failed to cleanup old data: {e}")
             return {"error": str(e)}
 
-    loop = asyncio.get_event_loop()
-    return loop.run_until_complete(_cleanup())
+    return asyncio.run(_cleanup())
 
 
 @celery_app.task(name="tasks.scheduled.refresh_video_analytics")
@@ -252,8 +246,7 @@ def refresh_video_analytics() -> Dict[str, Any]:
             logger.error(f"Failed to refresh analytics: {e}")
             return {"error": str(e)}
 
-    loop = asyncio.get_event_loop()
-    return loop.run_until_complete(_refresh())
+    return asyncio.run(_refresh())
 
 
 @celery_app.task(name="tasks.scheduled.analyze_pending_comments")
@@ -270,16 +263,15 @@ def analyze_pending_comments() -> Dict[str, Any]:
         logger.info("🧠 Analyzing pending comments...")
 
         try:
-            from src.infrastructure.repositories import CommentRepository
+            from src.infrastructure.repositories.comment_repository import (
+                CommentRepository,
+            )
             from src.infrastructure.tasks.analysis_tasks import batch_analyze_comments
 
             # Get unanalyzed comments
             async with db_manager.session() as session:
                 repo = CommentRepository(session)
-
-                # This would need to be implemented in the repository
-                # unanalyzed = await repo.list_unanalyzed(limit=500)
-                unanalyzed = []  # Placeholder
+                unanalyzed = await repo.get_unanalyzed_comments(limit=500)
 
             if not unanalyzed:
                 return {"comments_analyzed": 0}
@@ -299,8 +291,7 @@ def analyze_pending_comments() -> Dict[str, Any]:
             logger.error(f"Failed to analyze pending comments: {e}")
             return {"error": str(e)}
 
-    loop = asyncio.get_event_loop()
-    return loop.run_until_complete(_analyze())
+    return asyncio.run(_analyze())
 
 
 # ============================================================================

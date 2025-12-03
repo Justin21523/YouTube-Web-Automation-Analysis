@@ -1,0 +1,191 @@
+{% extends "base/_base.html" %}
+
+{% block title %}Task Manager{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-bold">Task Manager</h1>
+            <p class="text-slate-400 mt-1">Monitor and manage background tasks</p>
+        </div>
+        <div class="flex items-center gap-3">
+            <button id="refresh-tasks" class="btn btn-secondary">
+                <i data-lucide="refresh-cw" class="w-4 h-4 mr-2"></i>
+                Refresh
+            </button>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <!-- Active Tasks -->
+        <div class="bg-dark-secondary rounded-xl p-4 border border-slate-700">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-sm text-slate-400">Active</span>
+                <i data-lucide="loader" class="w-4 h-4 text-blue-500 animate-spin"></i>
+            </div>
+            <p class="text-2xl font-bold" id="stat-active">0</p>
+        </div>
+
+        <!-- Reserved Tasks -->
+        <div class="bg-dark-secondary rounded-xl p-4 border border-slate-700">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-sm text-slate-400">Reserved</span>
+                <i data-lucide="clock" class="w-4 h-4 text-yellow-500"></i>
+            </div>
+            <p class="text-2xl font-bold" id="stat-reserved">0</p>
+        </div>
+
+        <!-- Failed Tasks -->
+        <div class="bg-dark-secondary rounded-xl p-4 border border-slate-700">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-sm text-slate-400">Failed</span>
+                <i data-lucide="x-circle" class="w-4 h-4 text-red-500"></i>
+            </div>
+            <p class="text-2xl font-bold" id="stat-failed">0</p>
+        </div>
+
+        <!-- Workers -->
+        <div class="bg-dark-secondary rounded-xl p-4 border border-slate-700">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-sm text-slate-400">Workers</span>
+                <i data-lucide="server" class="w-4 h-4 text-green-500"></i>
+            </div>
+            <p class="text-2xl font-bold" id="stat-workers">0</p>
+        </div>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Active Tasks Section -->
+        <div class="lg:col-span-2 space-y-4">
+            <!-- Active Tasks -->
+            <div class="bg-dark-secondary rounded-xl border border-slate-700">
+                <div class="p-4 border-b border-slate-700 flex items-center justify-between">
+                    <h2 class="font-semibold flex items-center">
+                        <i data-lucide="play-circle" class="w-5 h-5 mr-2 text-blue-500"></i>
+                        Active Tasks
+                    </h2>
+                    <span id="active-count" class="text-sm text-slate-400">0 tasks</span>
+                </div>
+                <div id="active-tasks" class="p-4 space-y-3">
+                    <div class="text-center py-8 text-slate-400">
+                        <i data-lucide="loader" class="w-8 h-8 mx-auto animate-spin"></i>
+                        <p class="mt-2">Loading tasks...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Failed Tasks -->
+            <div class="bg-dark-secondary rounded-xl border border-slate-700">
+                <div class="p-4 border-b border-slate-700 flex items-center justify-between">
+                    <h2 class="font-semibold flex items-center">
+                        <i data-lucide="alert-triangle" class="w-5 h-5 mr-2 text-red-500"></i>
+                        Failed Tasks
+                    </h2>
+                    <button id="clear-failed" class="text-sm text-slate-400 hover:text-red-400">
+                        Clear All
+                    </button>
+                </div>
+                <div id="failed-tasks" class="p-4 space-y-3 max-h-96 overflow-y-auto">
+                    <div class="text-center py-8 text-slate-400">
+                        <i data-lucide="check-circle" class="w-8 h-8 mx-auto"></i>
+                        <p class="mt-2">No failed tasks</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="space-y-4">
+            <!-- Quick Actions -->
+            <div class="bg-dark-secondary rounded-xl border border-slate-700">
+                <div class="p-4 border-b border-slate-700">
+                    <h2 class="font-semibold flex items-center">
+                        <i data-lucide="zap" class="w-5 h-5 mr-2 text-yellow-500"></i>
+                        Quick Actions
+                    </h2>
+                </div>
+                <div class="p-4 space-y-3">
+                    <button id="quick-scrape" class="w-full btn btn-primary flex items-center justify-center">
+                        <i data-lucide="download" class="w-4 h-4 mr-2"></i>
+                        Scrape Video
+                    </button>
+                    <button id="quick-search" class="w-full btn btn-secondary flex items-center justify-center">
+                        <i data-lucide="search" class="w-4 h-4 mr-2"></i>
+                        Search & Scrape
+                    </button>
+                    <button id="quick-channel" class="w-full btn btn-secondary flex items-center justify-center">
+                        <i data-lucide="users" class="w-4 h-4 mr-2"></i>
+                        Scrape Channel
+                    </button>
+                </div>
+            </div>
+
+            <!-- Workers Status -->
+            <div class="bg-dark-secondary rounded-xl border border-slate-700">
+                <div class="p-4 border-b border-slate-700">
+                    <h2 class="font-semibold flex items-center">
+                        <i data-lucide="server" class="w-5 h-5 mr-2 text-green-500"></i>
+                        Workers
+                    </h2>
+                </div>
+                <div id="workers-list" class="p-4 space-y-3">
+                    <div class="text-center py-4 text-slate-400">
+                        <p class="text-sm">Loading workers...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Task Statistics -->
+            <div class="bg-dark-secondary rounded-xl border border-slate-700">
+                <div class="p-4 border-b border-slate-700">
+                    <h2 class="font-semibold flex items-center">
+                        <i data-lucide="bar-chart-2" class="w-5 h-5 mr-2 text-purple-500"></i>
+                        Statistics
+                    </h2>
+                </div>
+                <div id="task-statistics" class="p-4 space-y-3">
+                    <div class="flex justify-between text-sm">
+                        <span class="text-slate-400">Total Processed</span>
+                        <span id="stat-total-processed">--</span>
+                    </div>
+                    <div class="flex justify-between text-sm">
+                        <span class="text-slate-400">Success Rate</span>
+                        <span id="stat-success-rate">--</span>
+                    </div>
+                    <div class="flex justify-between text-sm">
+                        <span class="text-slate-400">Avg Duration</span>
+                        <span id="stat-avg-duration">--</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Task Modal -->
+<div id="task-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">
+    <div class="bg-dark-secondary rounded-xl shadow-2xl w-full max-w-md mx-4">
+        <div class="p-4 border-b border-slate-700 flex items-center justify-between">
+            <h3 class="font-semibold" id="modal-title">Create Task</h3>
+            <button class="close-modal p-1 hover:bg-slate-700 rounded transition-colors">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+        </div>
+        <div class="p-4 space-y-4" id="modal-content">
+            <!-- Dynamic content -->
+        </div>
+        <div class="p-4 border-t border-slate-700 flex justify-end gap-3">
+            <button class="close-modal btn btn-secondary">Cancel</button>
+            <button id="modal-submit" class="btn btn-primary">Submit</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script type="module" src="{{ url_for('static', path='js/pages/tasks.js') }}"></script>
+{% endblock %}

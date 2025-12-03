@@ -346,6 +346,51 @@ class SharedCache:
             "memory_cache_items": len(self._memory_cache),
         }
 
+    def get_gpu_info(self) -> Dict[str, Any]:
+        """
+        Get GPU information
+
+        Returns:
+            Dictionary with GPU information
+        """
+        try:
+            import torch
+
+            cuda_available = torch.cuda.is_available()
+            device_count = torch.cuda.device_count() if cuda_available else 0
+
+            gpu_info = {
+                "cuda_available": cuda_available,
+                "device_count": device_count,
+                "devices": [],
+            }
+
+            if cuda_available:
+                for i in range(device_count):
+                    device_props = torch.cuda.get_device_properties(i)
+                    gpu_info["devices"].append({
+                        "name": device_props.name,
+                        "total_memory_gb": round(device_props.total_memory / (1024**3), 2),
+                        "compute_capability": f"{device_props.major}.{device_props.minor}",
+                    })
+
+            return gpu_info
+
+        except ImportError:
+            return {
+                "cuda_available": False,
+                "device_count": 0,
+                "devices": [],
+                "error": "torch not installed",
+            }
+        except Exception as e:
+            return {
+                "cuda_available": False,
+                "device_count": 0,
+                "devices": [],
+                "error": str(e),
+            }
+
 
 # ============================================================================
 # Global Singleton Instance
@@ -376,6 +421,22 @@ def reset_cache() -> None:
     """Reset global cache instance (useful for testing)"""
     global _shared_cache
     _shared_cache = None
+
+
+def bootstrap_cache(cache_root: Optional[str] = None) -> SharedCache:
+    """
+    Bootstrap and initialize shared cache
+
+    This is an alias for get_shared_cache that explicitly indicates
+    cache initialization during application startup.
+
+    Args:
+        cache_root: Optional cache root directory
+
+    Returns:
+        SharedCache instance
+    """
+    return get_shared_cache(cache_root)
 
 
 # ============================================================================

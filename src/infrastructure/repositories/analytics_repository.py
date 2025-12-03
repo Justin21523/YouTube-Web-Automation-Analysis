@@ -803,31 +803,31 @@ if __name__ == "__main__":
                         "comment_growth": 0,
                     },
                 )
-                print("✅ created initial snapshot")
+                logger.info("✅ created initial snapshot")
             except Exception as e:
-                print(
+                logger.warning(
                     f"⚠️ skipped create_snapshot (likely duplicate/missing video): {e}"
                 )
 
             # 2) Calculate growth rate over the default period
             try:
                 rates = await repo.calculate_growth_rate(video_id, days=30)
-                print("📈 growth rates:", rates)
+                logger.info(f"📈 growth rates: {rates}")
             except Exception as e:
-                print(f"❌ calculate_growth_rate failed: {e}")
+                logger.error(f"❌ calculate_growth_rate failed: {e}")
 
             # 3) Pull average metrics over the same window
             try:
                 avg = await repo.get_average_metrics(video_id, days=30)
-                print("📊 average metrics:", avg)
+                logger.info(f"📊 average metrics: {avg}")
             except Exception as e:
-                print(f"❌ get_average_metrics failed: {e}")
+                logger.error(f"❌ get_average_metrics failed: {e}")
 
             # 4) Count snapshots (optionally filtered by video)
             try:
                 total = await repo.get_snapshot_count(video_id=video_id)
-                print(f"🧮 snapshot count (video): {total}")
+                logger.info(f"🧮 snapshot count (video): {total}")
             except Exception as e:
-                print(f"❌ get_snapshot_count failed: {e}")
+                logger.error(f"❌ get_snapshot_count failed: {e}")
 
     asyncio.run(_run_demo())

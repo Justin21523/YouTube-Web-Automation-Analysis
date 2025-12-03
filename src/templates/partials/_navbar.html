@@ -1,0 +1,181 @@
+<!-- Top Navigation Bar -->
+<header class="h-16 bg-dark-secondary border-b border-slate-700 flex items-center justify-between px-4 lg:px-6">
+    <!-- Left: Mobile Menu + Breadcrumb -->
+    <div class="flex items-center gap-4">
+        <!-- Mobile Menu Toggle -->
+        <button class="lg:hidden p-2 hover:bg-slate-700 rounded-lg" onclick="toggleSidebar()">
+            <i data-lucide="menu" class="w-5 h-5"></i>
+        </button>
+
+        <!-- Breadcrumb -->
+        <nav class="hidden sm:flex items-center gap-2 text-sm">
+            <a href="/" class="text-slate-400 hover:text-white transition-colors">Home</a>
+            {% if breadcrumb %}
+            {% for item in breadcrumb %}
+            <span class="text-slate-600">/</span>
+            {% if item.url %}
+            <a href="{{ item.url }}" class="text-slate-400 hover:text-white transition-colors">{{ item.name }}</a>
+            {% else %}
+            <span class="text-slate-200">{{ item.name }}</span>
+            {% endif %}
+            {% endfor %}
+            {% endif %}
+        </nav>
+    </div>
+
+    <!-- Center: Quick Search -->
+    <div class="hidden md:flex flex-1 max-w-md mx-4">
+        <div class="relative w-full">
+            <input
+                type="text"
+                id="global-search"
+                placeholder="Search videos, channels, tasks..."
+                class="w-full bg-dark-tertiary border border-slate-600 rounded-lg pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
+            >
+            <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
+            <kbd class="absolute right-3 top-1/2 -translate-y-1/2 hidden lg:inline-flex items-center gap-1 px-2 py-0.5 text-xs text-slate-400 bg-slate-700 rounded">
+                <span>Ctrl</span>
+                <span>K</span>
+            </kbd>
+        </div>
+    </div>
+
+    <!-- Right: Actions -->
+    <div class="flex items-center gap-2">
+        <!-- Quick Actions -->
+        <div class="hidden sm:flex items-center gap-2">
+            <!-- New Scrape Button -->
+            <button
+                id="quick-scrape-btn"
+                class="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                onclick="openQuickScrapeModal()"
+            >
+                <i data-lucide="plus" class="w-4 h-4"></i>
+                <span>New Scrape</span>
+            </button>
+        </div>
+
+        <!-- Notifications -->
+        <button class="relative p-2 hover:bg-slate-700 rounded-lg transition-colors" id="notifications-btn">
+            <i data-lucide="bell" class="w-5 h-5"></i>
+            <span id="notification-badge" class="absolute -top-1 -right-1 w-4 h-4 bg-yt-red text-white text-xs rounded-full flex items-center justify-center hidden">0</span>
+        </button>
+
+        <!-- Refresh -->
+        <button class="p-2 hover:bg-slate-700 rounded-lg transition-colors" onclick="location.reload()" title="Refresh">
+            <i data-lucide="refresh-cw" class="w-5 h-5"></i>
+        </button>
+
+        <!-- Settings -->
+        <a href="/system/health" class="p-2 hover:bg-slate-700 rounded-lg transition-colors" title="System Health">
+            <i data-lucide="settings" class="w-5 h-5"></i>
+        </a>
+    </div>
+</header>
+
+<!-- Quick Scrape Modal -->
+<div id="quick-scrape-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">
+    <div class="bg-dark-secondary rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+        <div class="flex items-center justify-between p-4 border-b border-slate-700">
+            <h3 class="text-lg font-semibold">Quick Scrape</h3>
+            <button onclick="closeQuickScrapeModal()" class="p-1 hover:bg-slate-700 rounded-lg">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+        </div>
+        <form id="quick-scrape-form" class="p-4 space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-slate-300 mb-2">Video URL or ID</label>
+                <input
+                    type="text"
+                    name="video_input"
+                    id="video_input"
+                    placeholder="https://youtube.com/watch?v=... or video ID"
+                    class="w-full bg-dark-tertiary border border-slate-600 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    required
+                >
+            </div>
+            <div class="flex items-center gap-4">
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" name="fetch_comments" class="rounded border-slate-600 bg-dark-tertiary text-blue-500 focus:ring-blue-500">
+                    <span class="text-sm text-slate-300">Fetch Comments</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" name="fetch_captions" class="rounded border-slate-600 bg-dark-tertiary text-blue-500 focus:ring-blue-500">
+                    <span class="text-sm text-slate-300">Fetch Captions</span>
+                </label>
+            </div>
+            <div class="flex justify-end gap-3 pt-2">
+                <button type="button" onclick="closeQuickScrapeModal()" class="px-4 py-2 text-sm font-medium text-slate-300 hover:text-white transition-colors">
+                    Cancel
+                </button>
+                <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
+                    Start Scrape
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function openQuickScrapeModal() {
+        document.getElementById('quick-scrape-modal').classList.remove('hidden');
+        document.getElementById('video_input').focus();
+    }
+
+    function closeQuickScrapeModal() {
+        document.getElementById('quick-scrape-modal').classList.add('hidden');
+        document.getElementById('quick-scrape-form').reset();
+    }
+
+    // Close modal on escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeQuickScrapeModal();
+        }
+        // Ctrl+K for search
+        if (e.ctrlKey && e.key === 'k') {
+            e.preventDefault();
+            document.getElementById('global-search').focus();
+        }
+    });
+
+    // Handle quick scrape form submission
+    document.getElementById('quick-scrape-form')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        const input = formData.get('video_input');
+
+        // Extract video ID from URL or use as-is
+        let videoId = input;
+        const urlMatch = input.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+        if (urlMatch) {
+            videoId = urlMatch[1];
+        }
+
+        if (videoId.length !== 11) {
+            window.toast?.error('Invalid video ID format');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/v1/tasks/scrape/video', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    video_id: videoId,
+                    fetch_comments: formData.get('fetch_comments') === 'on'
+                })
+            });
+
+            const data = await response.json();
+            if (response.ok) {
+                window.toast?.success(`Task started: ${data.task_id}`);
+                closeQuickScrapeModal();
+            } else {
+                window.toast?.error(data.detail || 'Failed to start task');
+            }
+        } catch (error) {
+            window.toast?.error('Network error');
+        }
+    });
+</script>

@@ -12,6 +12,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 import sys
 from pathlib import Path
@@ -173,6 +174,12 @@ def create_app() -> FastAPI:
     # Register routers
     _register_routers(app, config)
 
+    # Mount static files
+    static_dir = ROOT_DIR / "src" / "static"
+    if static_dir.exists():
+        app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+        logger.info("📁 Static files mounted at /static")
+
     return app
 
 
@@ -237,10 +244,10 @@ def _register_routers(app: FastAPI, config) -> None:
             "gpu_available": cache.get_gpu_info()["cuda_available"],
         }
 
-    # Root endpoint
-    @app.get("/", tags=["System"])
-    async def root():
-        """Root endpoint with API information"""
+    # API Root endpoint (JSON info)
+    @app.get("/api", tags=["System"])
+    async def api_root():
+        """API root endpoint with API information"""
         return {
             "message": "YouTube Web Automation Analysis API",
             "version": "0.1.0",
@@ -287,14 +294,42 @@ def _register_routers(app: FastAPI, config) -> None:
                 },
             }
 
-    # TODO: Register feature routers when available
-    # if config.features.enable_caption:
-    #     from src.api.routers import caption_router
-    #     app.include_router(caption_router, prefix="/api/v1/caption", tags=["Caption"])
+    # Register pages router (HTML templates)
+    from src.api.routers.pages_router import router as pages_router
+    app.include_router(pages_router)
+    logger.info("  🖥️  Pages router registered")
 
-    # if config.features.enable_vqa:
-    #     from src.api.routers import vqa_router
-    #     app.include_router(vqa_router, prefix="/api/v1/vqa", tags=["VQA"])
+    # Register core API routers
+    from src.api.routers.task_router import router as task_router
+    from src.api.routers.health_router import router as health_router, set_startup_time
+
+    app.include_router(task_router)
+    app.include_router(health_router)
+
+    # Set startup time for health checks
+    set_startup_time()
+    logger.info("  🏥 Health router registered")
+
+    # Register feature routers based on config
+    if config.features.enable_caption:
+        from src.api.routers.caption_router import router as caption_router
+        app.include_router(caption_router)
+        logger.info("  📝 Caption router registered")
+
+    if config.features.enable_vqa:
+        from src.api.routers.vqa_router import router as vqa_router
+        app.include_router(vqa_router)
+        logger.info("  👁️ VQA router registered")
+
+    if config.features.enable_chat:
+        from src.api.routers.chat_router import router as chat_router
+        app.include_router(chat_router)
+        logger.info("  💬 Chat router registered")
+
+    if config.features.enable_rag:
+        from src.api.routers.rag_router import router as rag_router
+        app.include_router(rag_router)
+        logger.info("  🔍 RAG router registered")
 
     logger.info("✅ API routers registered")
 

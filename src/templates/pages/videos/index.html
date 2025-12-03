@@ -1,0 +1,140 @@
+{% extends "base/_base.html" %}
+
+{% block title %}Videos{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-bold">Videos</h1>
+            <p class="text-slate-400 mt-1">Browse and manage scraped YouTube videos</p>
+        </div>
+        <div class="flex items-center gap-3">
+            <a href="/videos/search" class="btn btn-secondary">
+                <i data-lucide="search" class="w-4 h-4 mr-2"></i>
+                Search YouTube
+            </a>
+            <button id="scrape-new" class="btn btn-primary">
+                <i data-lucide="plus" class="w-4 h-4 mr-2"></i>
+                Scrape Video
+            </button>
+        </div>
+    </div>
+
+    <!-- Filters Bar -->
+    <div class="bg-dark-secondary rounded-xl p-4 border border-slate-700">
+        <div class="flex flex-col lg:flex-row gap-4">
+            <!-- Search -->
+            <div class="flex-1">
+                <div class="relative">
+                    <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
+                    <input type="text" id="filter-search"
+                        class="input w-full pl-10"
+                        placeholder="Search videos by title, channel...">
+                </div>
+            </div>
+
+            <!-- Sort -->
+            <select id="filter-sort" class="input w-full lg:w-48">
+                <option value="-scraped_at">Newest First</option>
+                <option value="scraped_at">Oldest First</option>
+                <option value="-view_count">Most Views</option>
+                <option value="-like_count">Most Likes</option>
+                <option value="title">Title A-Z</option>
+            </select>
+
+            <!-- View Toggle -->
+            <div class="flex items-center gap-1 bg-dark-tertiary rounded-lg p-1">
+                <button id="view-grid" class="view-toggle active p-2 rounded-md" title="Grid View">
+                    <i data-lucide="grid" class="w-4 h-4"></i>
+                </button>
+                <button id="view-list" class="view-toggle p-2 rounded-md" title="List View">
+                    <i data-lucide="list" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Bar -->
+    <div class="flex items-center gap-4 text-sm text-slate-400">
+        <span id="video-count">-- videos</span>
+        <span class="text-slate-600">|</span>
+        <span id="page-info">Page 1 of 1</span>
+    </div>
+
+    <!-- Video Grid/List -->
+    <div id="videos-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <!-- Loading State -->
+        <div class="col-span-full text-center py-12">
+            <i data-lucide="loader" class="w-10 h-10 mx-auto text-blue-500 animate-spin"></i>
+            <p class="mt-4 text-slate-400">Loading videos...</p>
+        </div>
+    </div>
+
+    <!-- Empty State -->
+    <div id="empty-state" class="hidden text-center py-16">
+        <div class="w-24 h-24 mx-auto mb-4 rounded-full bg-dark-secondary flex items-center justify-center">
+            <i data-lucide="video-off" class="w-12 h-12 text-slate-500"></i>
+        </div>
+        <h3 class="text-xl font-semibold mb-2">No Videos Found</h3>
+        <p class="text-slate-400 mb-6">Start by scraping some YouTube videos</p>
+        <button id="empty-scrape" class="btn btn-primary">
+            <i data-lucide="download" class="w-4 h-4 mr-2"></i>
+            Scrape Your First Video
+        </button>
+    </div>
+
+    <!-- Pagination -->
+    <div id="pagination" class="flex items-center justify-center gap-2 hidden">
+        <button id="page-prev" class="btn btn-secondary" disabled>
+            <i data-lucide="chevron-left" class="w-4 h-4"></i>
+        </button>
+        <div id="page-numbers" class="flex items-center gap-1">
+            <!-- Page numbers will be inserted here -->
+        </div>
+        <button id="page-next" class="btn btn-secondary">
+            <i data-lucide="chevron-right" class="w-4 h-4"></i>
+        </button>
+    </div>
+</div>
+
+<!-- Scrape Modal -->
+<div id="scrape-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">
+    <div class="bg-dark-secondary rounded-xl shadow-2xl w-full max-w-md mx-4">
+        <div class="p-4 border-b border-slate-700 flex items-center justify-between">
+            <h3 class="font-semibold">Scrape New Video</h3>
+            <button class="close-modal p-1 hover:bg-slate-700 rounded transition-colors">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+        </div>
+        <div class="p-4 space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-slate-300 mb-2">YouTube URL or Video ID</label>
+                <input type="text" id="scrape-input"
+                    class="input w-full"
+                    placeholder="https://youtube.com/watch?v=... or video ID">
+            </div>
+            <div class="flex items-center gap-2">
+                <input type="checkbox" id="fetch-comments" class="form-checkbox">
+                <label for="fetch-comments" class="text-sm text-slate-300">Also fetch comments</label>
+            </div>
+            <div id="comments-options" class="hidden space-y-2">
+                <label class="block text-sm font-medium text-slate-300">Max Comments</label>
+                <input type="number" id="max-comments" class="input w-full" value="500" min="1" max="10000">
+            </div>
+        </div>
+        <div class="p-4 border-t border-slate-700 flex justify-end gap-3">
+            <button class="close-modal btn btn-secondary">Cancel</button>
+            <button id="submit-scrape" class="btn btn-primary">
+                <i data-lucide="download" class="w-4 h-4 mr-2"></i>
+                Start Scraping
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script type="module" src="{{ url_for('static', path='js/pages/videos.js') }}"></script>
+{% endblock %}

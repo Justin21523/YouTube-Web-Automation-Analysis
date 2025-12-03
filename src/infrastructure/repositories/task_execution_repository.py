@@ -1,211 +1,435 @@
 # src/infrastructure/repositories/task_execution_repository.py
-
 """
-Task Execution Tracking Model
-Stores task execution history and status
+Task Execution Repository
+Handles all task execution tracking database operations
 """
 
-from sqlalchemy import Column, String, Integer, DateTime, Text, JSON, Enum as SQLEnum
-from sqlalchemy.sql import func
-from datetime import datetime
-from enum import Enum
-from typing import Optional, Dict, Any
+from typing import List, Optional, Dict, Any
+from datetime import datetime, timedelta
+from sqlalchemy import select, func, and_, or_, desc, asc, update
+from sqlalchemy.ext.asyncio import AsyncSession
+import logging
 
-from src.infrastructure.database.connection import Base
+from .base import BaseRepository
+from src.app.models.task_execution import TaskExecution, TaskStatus
 
-
-class TaskStatus(str, Enum):
-    """Task execution status"""
-
-    PENDING = "pending"
-    RUNNING = "running"
-    SUCCESS = "success"
-    FAILED = "failed"
-    RETRY = "retry"
-    REVOKED = "revoked"
+logger = logging.getLogger(__name__)
 
 
-class TaskExecutionRepository(Base):
+class TaskExecutionRepository(BaseRepository[TaskExecution]):
     """
-    Task Execution Tracking
-    Stores history and status of background tasks
+    Repository for TaskExecution operations
+    Provides task tracking, status management, and analytics
     """
 
-    __tablename__ = "task_executions"
+    def __init__(self, session: AsyncSession):
+        """Initialize task execution repository"""
+        super().__init__(session, TaskExecution)
 
-    # Primary identification
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    task_id = Column(
-        String(255), unique=True, nullable=False, index=True, comment="Celery task UUID"
-    )
+    # ========================================================================
+    # Task Retrieval Methods
+    # ========================================================================
 
-    # Task metadata
-    task_name = Column(
-        String(255),
-        nullable=False,
-        index=True,
-        comment="Task function name (e.g., scrape_video_metadata)",
-    )
-    task_type = Column(
-        String(50), index=True, comment="Task category: scraping/analysis/workflow"
-    )
-
-    # Task parameters
-    task_args = Column(JSON, comment="Positional arguments as JSON")
-    task_kwargs = Column(JSON, comment="Keyword arguments as JSON")
-
-    # Execution tracking
-    status = Column(
-        SQLEnum(TaskStatus),
-        nullable=False,
-        default=TaskStatus.PENDING,
-        index=True,
-        comment="Current task status",
-    )
-    progress = Column(Integer, default=0, comment="Progress percentage (0-100)")
-
-    # Results
-    result = Column(JSON, comment="Task result data as JSON")
-    error_message = Column(Text, comment="Error message if failed")
-    traceback_info = Column(Text, comment="Full traceback on failure")
-
-    # Retry tracking
-    retry_count = Column(Integer, default=0, comment="Number of retry attempts")
-    max_retries = Column(Integer, default=3, comment="Maximum retry limit")
-    next_retry_at = Column(DateTime, comment="Scheduled next retry time")
-
-    # Worker information
-    worker_name = Column(String(255), comment="Worker hostname that executed task")
-    queue_name = Column(String(50), default="default", comment="Queue name")
-
-    # Timing
-    created_at = Column(
-        DateTime, nullable=False, default=datetime.utcnow, comment="Task creation time"
-    )
-    started_at = Column(DateTime, index=True, comment="Task execution start time")
-    completed_at = Column(DateTime, comment="Task completion time")
-
-    # Performance metrics
-    execution_time_seconds = Column(Integer, comment="Total execution time")
-
-    # User context (optional)
-    user_id = Column(String(100), index=True, comment="User who triggered task")
-    session_id = Column(String(100), comment="Session identifier")
-
-    # Priority
-    priority = Column(Integer, default=5, comment="Task priority (0-10)")
-
-    # Parent-child relationships
-    parent_task_id = Column(
-        String(255), index=True, comment="Parent task ID for workflows"
-    )
-
-    def __repr__(self):
-        return f"<TaskExecution(id={self.task_id}, name={self.task_name}, status={self.status})>"
-
-    @property
-    def is_completed(self) -> bool:
-        """Check if task is in terminal state"""
-        return self.status in [
-            TaskStatus.SUCCESS,
-            TaskStatus.FAILED,
-            TaskStatus.REVOKED,
-        ]
-
-    @property
-    def is_running(self) -> bool:
-        """Check if task is currently executing"""
-        return self.status == TaskStatus.RUNNING
-
-    @property
-    def can_retry(self) -> bool:
-        """Check if task can be retried"""
-        return self.status == TaskStatus.FAILED and self.retry_count < self.max_retries
-
-    @property
-    def duration_seconds(self) -> Optional[int]:
-        """Calculate task duration if completed"""
-        if self.started_at and self.completed_at:
-            delta = self.completed_at - self.started_at
-            return int(delta.total_seconds())
-        return None
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for API responses"""
-        return {
-            "task_id": self.task_id,
-            "task_name": self.task_name,
-            "task_type": self.task_type,
-            "status": self.status.value,
-            "progress": self.progress,
-            "result": self.result,
-            "error_message": self.error_message,
-            "retry_count": self.retry_count,
-            "max_retries": self.max_retries,
-            "worker_name": self.worker_name,
-            "queue_name": self.queue_name,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "started_at": self.started_at.isoformat() if self.started_at else None,
-            "completed_at": (
-                self.completed_at.isoformat() if self.completed_at else None
-            ),
-            "execution_time_seconds": self.duration_seconds,
-            "priority": self.priority,
-            "parent_task_id": self.parent_task_id,
-        }
-
-    @classmethod
-    def create_from_task(
-        cls,
-        task_id: str,
-        task_name: str,
-        task_type: str = "general",
-        args: tuple = None,
-        kwargs: dict = None,
-        user_id: str = None,
-        priority: int = 5,
-        parent_task_id: str = None,
-    ):
+    async def get_by_task_id(self, task_id: str) -> Optional[TaskExecution]:
         """
-        Factory method to create task execution record
+        Get task by Celery task UUID
 
         Args:
             task_id: Celery task UUID
-            task_name: Task function name
-            task_type: Task category
-            args: Task positional arguments
-            kwargs: Task keyword arguments
-            user_id: User identifier
-            priority: Task priority
-            parent_task_id: Parent task for workflows
 
         Returns:
-            TaskExecution instance
+            TaskExecution or None
         """
-        return cls(
-            task_id=task_id,
-            task_name=task_name,
-            task_type=task_type,
-            task_args=list(args) if args else [],
-            task_kwargs=kwargs or {},
-            user_id=user_id,
-            priority=priority,
-            parent_task_id=parent_task_id,
-            status=TaskStatus.PENDING,
+        try:
+            result = await self.session.execute(
+                select(TaskExecution).where(TaskExecution.task_id == task_id)
+            )
+            return result.scalar_one_or_none()
+        except Exception as e:
+            logger.error(f"❌ Failed to get task by task_id: {e}")
+            raise
+
+    async def get_by_user(
+        self,
+        user_id: str,
+        status: Optional[TaskStatus] = None,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> List[TaskExecution]:
+        """
+        Get tasks by user ID
+
+        Args:
+            user_id: User identifier
+            status: Filter by status (optional)
+            skip: Pagination offset
+            limit: Max results
+
+        Returns:
+            List of task executions
+        """
+        try:
+            query = select(TaskExecution).where(TaskExecution.user_id == user_id)
+
+            if status:
+                query = query.where(TaskExecution.status == status)
+
+            query = query.order_by(desc(TaskExecution.created_at)).offset(skip).limit(limit)
+
+            result = await self.session.execute(query)
+            return list(result.scalars().all())
+        except Exception as e:
+            logger.error(f"❌ Failed to get tasks by user: {e}")
+            raise
+
+    async def get_active_tasks(self, limit: int = 100) -> List[TaskExecution]:
+        """
+        Get currently running tasks
+
+        Args:
+            limit: Max results
+
+        Returns:
+            List of running tasks
+        """
+        try:
+            result = await self.session.execute(
+                select(TaskExecution)
+                .where(TaskExecution.status == TaskStatus.RUNNING)
+                .order_by(desc(TaskExecution.started_at))
+                .limit(limit)
+            )
+            return list(result.scalars().all())
+        except Exception as e:
+            logger.error(f"❌ Failed to get active tasks: {e}")
+            raise
+
+    async def get_failed_tasks(
+        self, hours: int = 24, limit: int = 100
+    ) -> List[TaskExecution]:
+        """
+        Get recently failed tasks
+
+        Args:
+            hours: Time window in hours
+            limit: Max results
+
+        Returns:
+            List of failed tasks
+        """
+        try:
+            cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+
+            result = await self.session.execute(
+                select(TaskExecution)
+                .where(
+                    and_(
+                        TaskExecution.status == TaskStatus.FAILED,
+                        TaskExecution.completed_at >= cutoff_time,
+                    )
+                )
+                .order_by(desc(TaskExecution.completed_at))
+                .limit(limit)
+            )
+            return list(result.scalars().all())
+        except Exception as e:
+            logger.error(f"❌ Failed to get failed tasks: {e}")
+            raise
+
+    async def get_pending_tasks(self, limit: int = 100) -> List[TaskExecution]:
+        """
+        Get pending tasks waiting to be executed
+
+        Args:
+            limit: Max results
+
+        Returns:
+            List of pending tasks
+        """
+        try:
+            result = await self.session.execute(
+                select(TaskExecution)
+                .where(TaskExecution.status == TaskStatus.PENDING)
+                .order_by(asc(TaskExecution.created_at))
+                .limit(limit)
+            )
+            return list(result.scalars().all())
+        except Exception as e:
+            logger.error(f"❌ Failed to get pending tasks: {e}")
+            raise
+
+    # ========================================================================
+    # Status Management
+    # ========================================================================
+
+    async def update_status(
+        self,
+        task_id: str,
+        status: TaskStatus,
+        progress: Optional[int] = None,
+        result: Optional[Dict] = None,
+        error_message: Optional[str] = None,
+        traceback_info: Optional[str] = None,
+        worker_name: Optional[str] = None,
+    ) -> Optional[TaskExecution]:
+        """
+        Update task status and related fields
+
+        Args:
+            task_id: Celery task UUID
+            status: New status
+            progress: Progress percentage
+            result: Task result data
+            error_message: Error message if failed
+            traceback_info: Traceback info if failed
+            worker_name: Worker hostname
+
+        Returns:
+            Updated TaskExecution or None
+        """
+        try:
+            task = await self.get_by_task_id(task_id)
+            if not task:
+                return None
+
+            # Update fields
+            task.status = status
+
+            if progress is not None:
+                task.progress = progress
+
+            if result is not None:
+                task.result = result
+
+            if error_message is not None:
+                task.error_message = error_message
+
+            if traceback_info is not None:
+                task.traceback_info = traceback_info
+
+            if worker_name is not None:
+                task.worker_name = worker_name
+
+            # Update timestamps based on status
+            now = datetime.utcnow()
+            if status == TaskStatus.RUNNING and task.started_at is None:
+                task.started_at = now
+            elif status in [TaskStatus.SUCCESS, TaskStatus.FAILED, TaskStatus.REVOKED]:
+                task.completed_at = now
+                if task.started_at:
+                    task.execution_time_seconds = int(
+                        (now - task.started_at).total_seconds()
+                    )
+
+            await self.session.commit()
+            await self.session.refresh(task)
+            return task
+        except Exception as e:
+            await self.session.rollback()
+            logger.error(f"❌ Failed to update task status: {e}")
+            raise
+
+    async def mark_running(
+        self, task_id: str, worker_name: Optional[str] = None
+    ) -> Optional[TaskExecution]:
+        """Mark task as running"""
+        return await self.update_status(
+            task_id, TaskStatus.RUNNING, progress=0, worker_name=worker_name
         )
 
+    async def mark_success(
+        self, task_id: str, result: Optional[Dict] = None
+    ) -> Optional[TaskExecution]:
+        """Mark task as successful"""
+        return await self.update_status(
+            task_id, TaskStatus.SUCCESS, progress=100, result=result
+        )
 
-# Create index for common queries
-from sqlalchemy import Index
+    async def mark_failed(
+        self,
+        task_id: str,
+        error_message: str,
+        traceback_info: Optional[str] = None,
+    ) -> Optional[TaskExecution]:
+        """Mark task as failed"""
+        return await self.update_status(
+            task_id,
+            TaskStatus.FAILED,
+            error_message=error_message,
+            traceback_info=traceback_info,
+        )
 
-# Index for finding user's tasks
-Index("idx_task_user_status", TaskExecution.user_id, TaskExecution.status)
+    async def increment_retry(self, task_id: str) -> Optional[TaskExecution]:
+        """
+        Increment retry count for a task
 
-# Index for finding tasks by type and status
-Index("idx_task_type_status", TaskExecution.task_type, TaskExecution.status)
+        Args:
+            task_id: Celery task UUID
 
-# Index for finding child tasks
-Index("idx_task_parent", TaskExecution.parent_task_id)
+        Returns:
+            Updated TaskExecution or None
+        """
+        try:
+            task = await self.get_by_task_id(task_id)
+            if not task:
+                return None
 
-# Index for time-based queries
-Index("idx_task_created", TaskExecution.created_at.desc())
+            task.retry_count += 1
+            task.status = TaskStatus.RETRY
+            task.next_retry_at = datetime.utcnow() + timedelta(
+                minutes=2 ** task.retry_count
+            )
+
+            await self.session.commit()
+            await self.session.refresh(task)
+            return task
+        except Exception as e:
+            await self.session.rollback()
+            logger.error(f"❌ Failed to increment retry: {e}")
+            raise
+
+    # ========================================================================
+    # Analytics & Statistics
+    # ========================================================================
+
+    async def get_statistics(
+        self, hours: int = 24
+    ) -> Dict[str, Any]:
+        """
+        Get task execution statistics
+
+        Args:
+            hours: Time window for statistics
+
+        Returns:
+            Dictionary with task statistics
+        """
+        try:
+            cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+
+            # Count by status
+            result = await self.session.execute(
+                select(
+                    TaskExecution.status,
+                    func.count(TaskExecution.id).label("count"),
+                )
+                .where(TaskExecution.created_at >= cutoff_time)
+                .group_by(TaskExecution.status)
+            )
+
+            status_counts = {row.status.value: row.count for row in result.all()}
+
+            # Average execution time
+            avg_result = await self.session.execute(
+                select(func.avg(TaskExecution.execution_time_seconds))
+                .where(
+                    and_(
+                        TaskExecution.created_at >= cutoff_time,
+                        TaskExecution.execution_time_seconds.isnot(None),
+                    )
+                )
+            )
+            avg_execution_time = avg_result.scalar() or 0
+
+            # Total counts
+            total = sum(status_counts.values())
+
+            return {
+                "period_hours": hours,
+                "total_tasks": total,
+                "by_status": status_counts,
+                "success_rate": (
+                    round(status_counts.get("success", 0) / total * 100, 2)
+                    if total > 0
+                    else 0
+                ),
+                "avg_execution_time_seconds": round(avg_execution_time, 2),
+            }
+        except Exception as e:
+            logger.error(f"❌ Failed to get task statistics: {e}")
+            raise
+
+    async def get_children(self, parent_task_id: str) -> List[TaskExecution]:
+        """
+        Get child tasks for a workflow
+
+        Args:
+            parent_task_id: Parent task UUID
+
+        Returns:
+            List of child tasks
+        """
+        try:
+            result = await self.session.execute(
+                select(TaskExecution)
+                .where(TaskExecution.parent_task_id == parent_task_id)
+                .order_by(asc(TaskExecution.created_at))
+            )
+            return list(result.scalars().all())
+        except Exception as e:
+            logger.error(f"❌ Failed to get child tasks: {e}")
+            raise
+
+    # ========================================================================
+    # Cleanup Operations
+    # ========================================================================
+
+    async def cleanup_old_tasks(self, days: int = 30) -> int:
+        """
+        Delete old completed tasks
+
+        Args:
+            days: Keep tasks newer than this
+
+        Returns:
+            Number of deleted tasks
+        """
+        try:
+            cutoff_date = datetime.utcnow() - timedelta(days=days)
+
+            # Get count before deletion
+            count_result = await self.session.execute(
+                select(func.count(TaskExecution.id)).where(
+                    and_(
+                        TaskExecution.completed_at.isnot(None),
+                        TaskExecution.completed_at < cutoff_date,
+                        TaskExecution.status.in_([
+                            TaskStatus.SUCCESS,
+                            TaskStatus.FAILED,
+                            TaskStatus.REVOKED,
+                        ]),
+                    )
+                )
+            )
+            count = count_result.scalar() or 0
+
+            if count > 0:
+                # Delete old tasks
+                await self.session.execute(
+                    TaskExecution.__table__.delete().where(
+                        and_(
+                            TaskExecution.completed_at.isnot(None),
+                            TaskExecution.completed_at < cutoff_date,
+                            TaskExecution.status.in_([
+                                TaskStatus.SUCCESS,
+                                TaskStatus.FAILED,
+                                TaskStatus.REVOKED,
+                            ]),
+                        )
+                    )
+                )
+                await self.session.commit()
+                logger.info(f"✅ Cleaned up {count} old task records")
+
+            return count
+        except Exception as e:
+            await self.session.rollback()
+            logger.error(f"❌ Failed to cleanup old tasks: {e}")
+            raise
+
+
+# ============================================================================
+# Export
+# ============================================================================
+
+__all__ = ["TaskExecutionRepository", "TaskStatus"]

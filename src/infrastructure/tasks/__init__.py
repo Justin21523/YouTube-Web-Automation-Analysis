@@ -19,6 +19,10 @@ from src.infrastructure.tasks import (
     analysis_tasks,
     workflow_tasks,
     scheduled_tasks,
+    caption_tasks,
+    vqa_tasks,
+    chat_tasks,
+    rag_tasks,
 )
 
 __all__ = [
@@ -33,4 +37,8 @@ __all__ = [
     "analysis_tasks",
     "workflow_tasks",
     "scheduled_tasks",
+    "caption_tasks",
+    "vqa_tasks",
+    "chat_tasks",
+    "rag_tasks",
 ]

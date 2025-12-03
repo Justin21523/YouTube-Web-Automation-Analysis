@@ -88,8 +88,7 @@ def refresh_video_analytics(
             update_task_status(self.request.id, "failed", error_message=str(e))
             raise self.retry(exc=e)
 
-    loop = asyncio.get_event_loop()
-    return loop.run_until_complete(_refresh())
+    return asyncio.run(_refresh())
 
 
 @celery_app.task(
@@ -184,8 +183,12 @@ def search_and_scrape_videos(
             update_task_status(self.request.id, "failed", error_message=str(e))
             raise self.retry(exc=e)
 
-    loop = asyncio.get_event_loop()
-    return loop.run_until_complete(_search_scrape()).scrape_video_metadata",
+    return asyncio.run(_search_scrape())
+
+
+@celery_app.task(
+    bind=True,
+    name="tasks.scraping.scrape_video_metadata",
     max_retries=3,
     default_retry_delay=60,
 )
@@ -253,8 +256,7 @@ def scrape_video_metadata(self, video_id: str, user_id: str = None) -> Dict[str,
             # Retry with exponential backoff
             raise self.retry(exc=e, countdown=60 * (2 ** self.request.retries))
 
-    loop = asyncio.get_event_loop()
-    return loop.run_until_complete(_scrape())
+    return asyncio.run(_scrape())
 
 
 @celery_app.task(
@@ -346,8 +348,7 @@ def scrape_video_comments(
             update_task_status(self.request.id, "failed", error_message=str(e))
             raise self.retry(exc=e)
 
-    loop = asyncio.get_event_loop()
-    return loop.run_until_complete(_scrape())
+    return asyncio.run(_scrape())
 
 
 @celery_app.task(
@@ -420,11 +421,4 @@ def scrape_videos_batch(
             update_task_status(self.request.id, "failed", error_message=str(e))
             raise self.retry(exc=e)
 
-    loop = asyncio.get_event_loop()
-    return loop.run_until_complete(_scrape())
-
-
-@celery_app.task(
-    bind=True,
-    name="tasks.scraping
-)
+    return asyncio.run(_scrape())

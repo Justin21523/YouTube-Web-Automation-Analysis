@@ -128,6 +128,11 @@ class ChannelRepository(BaseRepository[Channel]):
             logger.error(f"❌ Failed to get active channels: {e}")
             raise
 
+    # Alias for backward compatibility
+    async def list_active(self, skip: int = 0, limit: int = 100) -> List[Channel]:
+        """Alias for get_active_channels"""
+        return await self.get_active_channels(skip=skip, limit=limit)
+
     async def get_verified_channels(
         self, skip: int = 0, limit: int = 100
     ) -> List[Channel]:

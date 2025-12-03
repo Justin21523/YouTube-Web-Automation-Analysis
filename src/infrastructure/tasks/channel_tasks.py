@@ -81,8 +81,7 @@ def scrape_channel_metadata(
             update_task_status(self.request.id, "failed", error_message=str(e))
             raise self.retry(exc=e)
 
-    loop = asyncio.get_event_loop()
-    return loop.run_until_complete(_scrape())
+    return asyncio.run(_scrape())
 
 
 @celery_app.task(
@@ -182,8 +181,7 @@ def scrape_channel_videos(
             update_task_status(self.request.id, "failed", error_message=str(e))
             raise self.retry(exc=e)
 
-    loop = asyncio.get_event_loop()
-    return loop.run_until_complete(_scrape())
+    return asyncio.run(_scrape())
 
 
 @celery_app.task(
@@ -277,8 +275,7 @@ def sync_channel_data(
             update_task_status(self.request.id, "failed", error_message=str(e))
             raise self.retry(exc=e)
 
-    loop = asyncio.get_event_loop()
-    return loop.run_until_complete(_sync())
+    return asyncio.run(_sync())
 
 
 @celery_app.task(
@@ -386,5 +383,4 @@ def monitor_channel(
             update_task_status(self.request.id, "failed", error_message=str(e))
             raise self.retry(exc=e)
 
-    loop = asyncio.get_event_loop()
-    return loop.run_until_complete(_monitor())
+    return asyncio.run(_monitor())

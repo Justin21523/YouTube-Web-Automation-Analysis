@@ -1,82 +1,83 @@
 # src/app/database.py
 """
 Database Configuration and Session Management
-Uses SQLAlchemy with async support
+Unified interface for async SQLAlchemy database operations
+
+This module re-exports database components from the infrastructure layer
+and provides convenience functions for database initialization.
 """
 
-from sqlalchemy import create_engine, text
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
-from typing import Generator
+import asyncio
 import logging
+from typing import AsyncGenerator
 
-from src.app.config import get_config
+from sqlalchemy.ext.asyncio import AsyncSession
+
+# Re-export all database components from infrastructure layer
 from src.infrastructure.database.connection import (
     Base,
     DatabaseManager,
     db_manager,
     get_session,
+    init_database_from_config,
 )
 
 logger = logging.getLogger(__name__)
-
-config = get_config()
 
 __all__ = [
     "Base",
     "DatabaseManager",
     "db_manager",
     "get_session",
+    "init_db",
+    "init_db_async",
+    "drop_all_tables",
+    "reset_database",
 ]
-
-# Create engine
-engine = create_engine(
-    config.database.url,
-    connect_args=(
-        {"check_same_thread": False} if "sqlite" in config.database.url else {}
-    ),
-    echo=config.database.echo,
-    pool_size=config.database.pool_size,
-    max_overflow=config.database.max_overflow,
-)
-
-# Session factory
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-# Base class for models
-Base = declarative_base()
 
 
 def init_db() -> None:
     """
-    Initialize database tables
-    Creates all tables defined by models
+    Initialize database (synchronous wrapper)
+
+    Creates all tables defined by models.
+    This is a convenience function that wraps the async initialization.
     """
     try:
-        Base.metadata.create_all(bind=engine)
+        # Initialize database manager from config if not already done
+        if not db_manager.is_initialized:
+            init_database_from_config()
+
+        # Create tables
+        asyncio.run(_create_tables())
         logger.info("✅ Database tables created successfully")
     except Exception as e:
         logger.error(f"❌ Failed to create database tables: {e}")
         raise
 
 
-def get_db() -> Generator[Session, None, None]:
+async def init_db_async() -> None:
     """
-    Dependency for getting database session
+    Initialize database (async version)
 
-    Usage in FastAPI:
-        @app.get("/videos")
-        def get_videos(db: Session = Depends(get_db)):
-            ...
-
-    Yields:
-        Database session
+    Creates all tables defined by models.
+    Use this in async contexts like FastAPI lifespan.
     """
-    db = SessionLocal()
     try:
-        yield db
-    finally:
-        db.close()
+        # Initialize database manager from config if not already done
+        if not db_manager.is_initialized:
+            init_database_from_config()
+
+        await db_manager.create_tables()
+        logger.info("✅ Database tables created successfully")
+    except Exception as e:
+        logger.error(f"❌ Failed to create database tables: {e}")
+        raise
+
+
+async def _create_tables() -> None:
+    """Internal async helper for creating tables"""
+    await db_manager.create_tables()
 
 
 def drop_all_tables() -> None:
@@ -85,11 +86,16 @@ def drop_all_tables() -> None:
     Only use in development/testing
     """
     try:
-        Base.metadata.drop_all(bind=engine)
+        asyncio.run(_drop_tables())
         logger.warning("⚠️  All tables dropped")
     except Exception as e:
         logger.error(f"❌ Failed to drop tables: {e}")
         raise
+
+
+async def _drop_tables() -> None:
+    """Internal async helper for dropping tables"""
+    await db_manager.drop_tables()
 
 
 def reset_database() -> None:
@@ -103,22 +109,51 @@ def reset_database() -> None:
     logger.info("✅ Database reset complete")
 
 
+async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
+    """
+    FastAPI dependency for getting async database session
+
+    Usage:
+        @app.get("/videos")
+        async def get_videos(session: AsyncSession = Depends(get_async_session)):
+            ...
+
+    Yields:
+        AsyncSession instance
+    """
+    async for session in get_session():
+        yield session
+
+
 # Test connection on import
 if __name__ == "__main__":
+    import asyncio
+
     print("🔧 Testing database connection...")
 
-    try:
-        with engine.connect() as connection:
-            result = connection.execute(text("SELECT 1"))
-            assert result.fetchone()[0] == 1  # type: ignore
-        print("✅ Database connection successful!")
+    async def test_connection():
+        try:
+            # Initialize
+            init_database_from_config()
 
-        # Initialize tables
-        init_db()
-        print("✅ Database tables initialized!")
+            # Test with a session
+            async with db_manager.session() as session:
+                from sqlalchemy import text
 
-    except Exception as e:
-        print(f"❌ Database connection failed: {e}")
-        import traceback
+                result = await session.execute(text("SELECT 1"))
+                assert result.scalar() == 1
+            print("✅ Database connection successful!")
 
-        traceback.print_exc()
+            # Initialize tables
+            await db_manager.create_tables()
+            print("✅ Database tables initialized!")
+
+        except Exception as e:
+            print(f"❌ Database connection failed: {e}")
+            import traceback
+
+            traceback.print_exc()
+        finally:
+            await db_manager.close()
+
+    asyncio.run(test_connection())

@@ -1,0 +1,277 @@
+{% extends "base/_base.html" %}
+
+{% block title %}System Health{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-bold">System Health</h1>
+            <p class="text-slate-400 mt-1">Monitor system status and performance</p>
+        </div>
+        <div class="flex items-center gap-3">
+            <span id="last-updated" class="text-sm text-slate-400">--</span>
+            <button id="refresh-health" class="btn btn-secondary">
+                <i data-lucide="refresh-cw" class="w-4 h-4 mr-2"></i>
+                Refresh
+            </button>
+        </div>
+    </div>
+
+    <!-- Overall Status -->
+    <div id="overall-status" class="bg-dark-secondary rounded-xl p-6 border border-slate-700">
+        <div class="flex items-center gap-4">
+            <div id="status-icon" class="w-16 h-16 rounded-full bg-gray-500/20 flex items-center justify-center">
+                <i data-lucide="loader" class="w-8 h-8 text-gray-500 animate-spin"></i>
+            </div>
+            <div>
+                <h2 id="status-title" class="text-xl font-bold">Checking Status...</h2>
+                <p id="status-message" class="text-slate-400 mt-1">Connecting to backend services</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Service Status Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- API Server -->
+        <div class="bg-dark-secondary rounded-xl p-4 border border-slate-700">
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="server" class="w-5 h-5 text-blue-500"></i>
+                    <h3 class="font-medium">API Server</h3>
+                </div>
+                <span id="api-status" class="w-3 h-3 rounded-full bg-gray-500"></span>
+            </div>
+            <div class="space-y-2 text-sm">
+                <div class="flex justify-between">
+                    <span class="text-slate-400">Version</span>
+                    <span id="api-version">--</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-slate-400">Uptime</span>
+                    <span id="api-uptime">--</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-slate-400">Response Time</span>
+                    <span id="api-response-time">--</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Database -->
+        <div class="bg-dark-secondary rounded-xl p-4 border border-slate-700">
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="database" class="w-5 h-5 text-green-500"></i>
+                    <h3 class="font-medium">Database</h3>
+                </div>
+                <span id="db-status" class="w-3 h-3 rounded-full bg-gray-500"></span>
+            </div>
+            <div class="space-y-2 text-sm">
+                <div class="flex justify-between">
+                    <span class="text-slate-400">Type</span>
+                    <span id="db-type">--</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-slate-400">Videos</span>
+                    <span id="db-videos">--</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-slate-400">Channels</span>
+                    <span id="db-channels">--</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Redis/Cache -->
+        <div class="bg-dark-secondary rounded-xl p-4 border border-slate-700">
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="hard-drive" class="w-5 h-5 text-red-500"></i>
+                    <h3 class="font-medium">Cache</h3>
+                </div>
+                <span id="cache-status" class="w-3 h-3 rounded-full bg-gray-500"></span>
+            </div>
+            <div class="space-y-2 text-sm">
+                <div class="flex justify-between">
+                    <span class="text-slate-400">Status</span>
+                    <span id="cache-connection">--</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-slate-400">Memory</span>
+                    <span id="cache-memory">--</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-slate-400">Hit Rate</span>
+                    <span id="cache-hit-rate">--</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Celery Workers -->
+        <div class="bg-dark-secondary rounded-xl p-4 border border-slate-700">
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="cpu" class="w-5 h-5 text-yellow-500"></i>
+                    <h3 class="font-medium">Workers</h3>
+                </div>
+                <span id="workers-status" class="w-3 h-3 rounded-full bg-gray-500"></span>
+            </div>
+            <div class="space-y-2 text-sm">
+                <div class="flex justify-between">
+                    <span class="text-slate-400">Active</span>
+                    <span id="workers-active">--</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-slate-400">Tasks Running</span>
+                    <span id="workers-tasks">--</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-slate-400">Queue Size</span>
+                    <span id="workers-queue">--</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- GPU -->
+        <div class="bg-dark-secondary rounded-xl p-4 border border-slate-700">
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="monitor" class="w-5 h-5 text-purple-500"></i>
+                    <h3 class="font-medium">GPU</h3>
+                </div>
+                <span id="gpu-status" class="w-3 h-3 rounded-full bg-gray-500"></span>
+            </div>
+            <div class="space-y-2 text-sm">
+                <div class="flex justify-between">
+                    <span class="text-slate-400">Available</span>
+                    <span id="gpu-available">--</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-slate-400">Devices</span>
+                    <span id="gpu-devices">--</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-slate-400">Memory</span>
+                    <span id="gpu-memory">--</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Features -->
+        <div class="bg-dark-secondary rounded-xl p-4 border border-slate-700">
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="brain" class="w-5 h-5 text-cyan-500"></i>
+                    <h3 class="font-medium">AI Features</h3>
+                </div>
+                <span id="ai-status" class="w-3 h-3 rounded-full bg-gray-500"></span>
+            </div>
+            <div class="space-y-2 text-sm">
+                <div class="flex justify-between">
+                    <span class="text-slate-400">Caption</span>
+                    <span id="ai-caption">--</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-slate-400">VQA</span>
+                    <span id="ai-vqa">--</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-slate-400">RAG</span>
+                    <span id="ai-rag">--</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Metrics Section -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- System Metrics -->
+        <div class="bg-dark-secondary rounded-xl border border-slate-700">
+            <div class="p-4 border-b border-slate-700">
+                <h2 class="font-semibold flex items-center">
+                    <i data-lucide="activity" class="w-5 h-5 mr-2 text-blue-500"></i>
+                    System Metrics
+                </h2>
+            </div>
+            <div class="p-4 space-y-4">
+                <!-- CPU Usage -->
+                <div>
+                    <div class="flex justify-between text-sm mb-1">
+                        <span class="text-slate-400">CPU Usage</span>
+                        <span id="cpu-usage">--</span>
+                    </div>
+                    <div class="h-2 bg-dark-tertiary rounded-full overflow-hidden">
+                        <div id="cpu-bar" class="h-full bg-blue-500 transition-all" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <!-- Memory Usage -->
+                <div>
+                    <div class="flex justify-between text-sm mb-1">
+                        <span class="text-slate-400">Memory Usage</span>
+                        <span id="memory-usage">--</span>
+                    </div>
+                    <div class="h-2 bg-dark-tertiary rounded-full overflow-hidden">
+                        <div id="memory-bar" class="h-full bg-green-500 transition-all" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <!-- Disk Usage -->
+                <div>
+                    <div class="flex justify-between text-sm mb-1">
+                        <span class="text-slate-400">Disk Usage</span>
+                        <span id="disk-usage">--</span>
+                    </div>
+                    <div class="h-2 bg-dark-tertiary rounded-full overflow-hidden">
+                        <div id="disk-bar" class="h-full bg-yellow-500 transition-all" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- API Endpoints -->
+        <div class="bg-dark-secondary rounded-xl border border-slate-700">
+            <div class="p-4 border-b border-slate-700">
+                <h2 class="font-semibold flex items-center">
+                    <i data-lucide="link" class="w-5 h-5 mr-2 text-green-500"></i>
+                    API Endpoints
+                </h2>
+            </div>
+            <div class="p-4 space-y-3" id="endpoints-list">
+                <div class="text-center py-4 text-slate-400">
+                    <p class="text-sm">Loading endpoints...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Links -->
+    <div class="bg-dark-secondary rounded-xl p-4 border border-slate-700">
+        <h3 class="font-semibold mb-4">Quick Links</h3>
+        <div class="flex flex-wrap gap-3">
+            <a href="/docs" target="_blank" class="btn btn-secondary btn-sm">
+                <i data-lucide="book-open" class="w-4 h-4 mr-2"></i>
+                API Docs
+            </a>
+            <a href="/redoc" target="_blank" class="btn btn-secondary btn-sm">
+                <i data-lucide="file-text" class="w-4 h-4 mr-2"></i>
+                ReDoc
+            </a>
+            <a href="/openapi.json" target="_blank" class="btn btn-secondary btn-sm">
+                <i data-lucide="code" class="w-4 h-4 mr-2"></i>
+                OpenAPI
+            </a>
+            <a href="/tasks" class="btn btn-secondary btn-sm">
+                <i data-lucide="list-todo" class="w-4 h-4 mr-2"></i>
+                Task Manager
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script type="module" src="{{ url_for('static', path='js/pages/health.js') }}"></script>
+{% endblock %}

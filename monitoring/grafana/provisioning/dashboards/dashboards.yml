@@ -1,0 +1,17 @@
+# monitoring/grafana/provisioning/dashboards/dashboards.yml
+# Grafana Dashboard Provisioning Configuration
+# ============================================================================
+
+apiVersion: 1
+
+providers:
+  - name: 'YouTube Automation Dashboards'
+    orgId: 1
+    folder: 'YouTube Automation'
+    folderUid: 'youtube-automation'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/json

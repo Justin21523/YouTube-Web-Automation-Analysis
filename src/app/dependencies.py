@@ -3,15 +3,40 @@ Service Dependency Injection
 FastAPI dependency providers for services
 """
 
-from typing import Generator
+from typing import AsyncGenerator
 from functools import lru_cache
 
-from src.services import VideoService
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.services import VideoService, CaptionService
 from src.infrastructure.clients.youtube_api import create_youtube_client
-from src.infrastructure.repositories import VideoRepository, ChannelRepository
+from src.infrastructure.repositories import (
+    VideoRepository,
+    ChannelRepository,
+    CaptionRepository,
+    CaptionSegmentRepository,
+)
 from src.app.shared_cache import get_shared_cache
 from src.app.config import get_config
-from src.app.database import get_db
+from src.infrastructure.database import get_session
+
+
+# ============================================================================
+# Database Dependency
+# ============================================================================
+
+
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    """
+    FastAPI Dependency for database session
+
+    Usage:
+        @router.get("/")
+        async def endpoint(db: AsyncSession = Depends(get_db)):
+            ...
+    """
+    async for session in get_session():
+        yield session
 
 
 # ============================================================================
@@ -30,33 +55,31 @@ def get_youtube_client():
     return create_youtube_client()
 
 
-def get_video_service() -> Generator[VideoService, None, None]:
+async def get_video_service(
+    session: AsyncSession,
+) -> VideoService:
     """
-    Dependency provider for VideoService
+    Create VideoService with all dependencies
 
-    Usage in FastAPI:
-        @router.get("/videos/{video_id}")
-        async def get_video(
-            video_id: str,
-            service: VideoService = Depends(get_video_service),
-            db: AsyncSession = Depends(get_db)
-        ):
-            return await service.get_video(db, video_id)
+    This is a factory function, not a FastAPI dependency.
+    Use get_video_service_dep() for FastAPI dependency injection.
 
-    Yields:
+    Args:
+        session: AsyncSession for database operations
+
+    Returns:
         VideoService instance
     """
-    # Get dependencies
     youtube_client = get_youtube_client()
     cache = get_shared_cache()
     config = get_config()
 
-    # Create repositories (will use injected DB session)
-    video_repo = VideoRepository()
-    channel_repo = ChannelRepository()
+    # Create repositories with session
+    video_repo = VideoRepository(session)
+    channel_repo = ChannelRepository(session)
 
-    # Create service
-    service = VideoService(
+    # Create and return service
+    return VideoService(
         youtube_client=youtube_client,
         video_repo=video_repo,
         channel_repo=channel_repo,
@@ -64,11 +87,82 @@ def get_video_service() -> Generator[VideoService, None, None]:
         config=config,
     )
 
-    try:
-        yield service
-    finally:
-        # Cleanup if needed
-        pass
+
+async def get_video_service_dep(
+    session: AsyncSession = None,  # Will be injected via get_session
+) -> AsyncGenerator[VideoService, None]:
+    """
+    FastAPI Dependency provider for VideoService
+
+    Usage in FastAPI:
+        @router.get("/videos/{video_id}")
+        async def get_video(
+            video_id: str,
+            session: AsyncSession = Depends(get_session),
+            service: VideoService = Depends(get_video_service_dep)
+        ):
+            # Note: session must be passed to service methods
+            return await service.get_video(video_id)
+
+    Yields:
+        VideoService instance with injected session
+    """
+    # Use get_session to obtain a proper session if not provided
+    if session is None:
+        async for db_session in get_session():
+            service = await get_video_service(db_session)
+            yield service
+            return
+
+    service = await get_video_service(session)
+    yield service
+
+
+# ============================================================================
+# Caption Service Factory
+# ============================================================================
+
+
+async def get_caption_service(
+    session: AsyncSession = None,
+) -> CaptionService:
+    """
+    Create CaptionService with all dependencies
+
+    Args:
+        session: AsyncSession for database operations
+
+    Returns:
+        CaptionService instance
+    """
+    # Use get_session to obtain a proper session if not provided
+    if session is None:
+        async for db_session in get_session():
+            return await _create_caption_service(db_session)
+
+    return await _create_caption_service(session)
+
+
+async def _create_caption_service(session: AsyncSession) -> CaptionService:
+    """Helper to create CaptionService with session"""
+    youtube_client = get_youtube_client()
+    cache = get_shared_cache()
+    config = get_config()
+
+    # Create repositories with session
+    caption_repo = CaptionRepository(session)
+    segment_repo = CaptionSegmentRepository(session)
+    video_repo = VideoRepository(session)
+
+    # Create and return service
+    return CaptionService(
+        caption_repo=caption_repo,
+        segment_repo=segment_repo,
+        video_repo=video_repo,
+        youtube_client=youtube_client,
+        cache=cache,
+        config=config,
+    )
 
 
 # ============================================================================

@@ -30,6 +30,7 @@ sys.path.append(str(ROOT_DIR))
 
 from src.app.config import get_config
 from src.app.shared_cache import get_shared_cache
+from src.infrastructure.clients.rate_limiter import AdaptiveRateLimiter
 
 logger = logging.getLogger(__name__)
 
@@ -232,7 +233,11 @@ class YouTubeAPIClient:
     BASE_URL = "https://www.googleapis.com/youtube/v3"
 
     def __init__(
-        self, api_key: Optional[str] = None, max_retries: int = 3, timeout: int = 30
+        self,
+        api_key: Optional[str] = None,
+        max_retries: int = 3,
+        timeout: int = 30,
+        calls_per_second: float = 10.0,
     ):
         """
         Initialize YouTube API client
@@ -241,6 +246,7 @@ class YouTubeAPIClient:
             api_key: YouTube Data API key (reads from env if not provided)
             max_retries: Maximum retry attempts for failed requests
             timeout: Request timeout in seconds
+            calls_per_second: Rate limit for API calls (default: 10/sec)
         """
         self.config = get_config()
         self.cache = get_shared_cache()
@@ -263,7 +269,17 @@ class YouTubeAPIClient:
         # Quota tracking
         self.quota_tracker = QuotaTracker()
 
-        logger.info("✅ YouTube API client initialized")
+        # Rate limiter with adaptive adjustment
+        self.rate_limiter = AdaptiveRateLimiter(
+            initial_calls_per_second=calls_per_second,
+            min_calls_per_second=1.0,
+            max_calls_per_second=calls_per_second,
+            burst_capacity=int(calls_per_second * 2),
+        )
+
+        logger.info(
+            f"✅ YouTube API client initialized (rate limit: {calls_per_second} calls/sec)"
+        )
 
     def _get_api_key(self) -> Optional[str]:
         """Load API key from environment or config"""
@@ -301,15 +317,33 @@ class YouTubeAPIClient:
         # Exponential backoff retry
         for attempt in range(self.max_retries):
             try:
+                # Apply rate limiting before each request
+                if not self.rate_limiter.acquire(timeout=30.0):
+                    raise TimeoutError("Rate limit timeout - too many requests")
+
                 response = self.client.get(url, params=params)
                 response.raise_for_status()
 
                 # Consume quota on success
                 self.quota_tracker.consume_quota(operation)
 
+                # Report success to adaptive rate limiter
+                self.rate_limiter.report_success()
+
                 return response.json()
 
             except httpx.HTTPStatusError as e:
+                if e.response.status_code == 429:
+                    # Rate limited by YouTube - report to adaptive limiter
+                    self.rate_limiter.report_error(429)
+                    wait_time = 2 ** (attempt + 1)
+                    logger.warning(
+                        f"⚠️ Rate limited (429), backing off {wait_time}s "
+                        f"(attempt {attempt + 1}/{self.max_retries})"
+                    )
+                    time.sleep(wait_time)
+                    continue
+
                 if e.response.status_code == 403:
                     # Quota exceeded or API key invalid
                     logger.error(f"❌ API error 403: {e.response.text}")

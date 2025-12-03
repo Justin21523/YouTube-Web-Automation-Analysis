@@ -1,0 +1,87 @@
+# monitoring/prometheus.yml
+# Prometheus Configuration for YouTube Web Automation Analysis
+# ============================================================================
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'youtube-automation'
+
+# ============================================================================
+# Alertmanager Configuration
+# ============================================================================
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+          # - alertmanager:9093
+
+# ============================================================================
+# Rule Files
+# ============================================================================
+rule_files:
+  - "alerts/*.yml"
+
+# ============================================================================
+# Scrape Configurations
+# ============================================================================
+scrape_configs:
+  # --------------------------------------------------------------------------
+  # Prometheus Self-Monitoring
+  # --------------------------------------------------------------------------
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    metrics_path: /metrics
+
+  # --------------------------------------------------------------------------
+  # FastAPI Application
+  # --------------------------------------------------------------------------
+  - job_name: 'fastapi'
+    static_configs:
+      - targets: ['api:8000']
+    metrics_path: /health/metrics
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # --------------------------------------------------------------------------
+  # Redis Metrics (via Redis Exporter)
+  # --------------------------------------------------------------------------
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+    metrics_path: /metrics
+
+  # --------------------------------------------------------------------------
+  # PostgreSQL Metrics (via PostgreSQL Exporter)
+  # --------------------------------------------------------------------------
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+    metrics_path: /metrics
+
+  # --------------------------------------------------------------------------
+  # Celery Flower Metrics
+  # --------------------------------------------------------------------------
+  - job_name: 'flower'
+    static_configs:
+      - targets: ['flower:5555']
+    metrics_path: /metrics
+    scrape_interval: 30s
+
+  # --------------------------------------------------------------------------
+  # Node Exporter (System Metrics)
+  # --------------------------------------------------------------------------
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    metrics_path: /metrics
+
+  # --------------------------------------------------------------------------
+  # Nginx Metrics (via Nginx Exporter)
+  # --------------------------------------------------------------------------
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx-exporter:9113']
+    metrics_path: /metrics

@@ -155,8 +155,7 @@ def analyze_video_sentiment(
             update_task_status(self.request.id, "failed", error_message=str(e))
             raise self.retry(exc=e)
 
-    loop = asyncio.get_event_loop()
-    return loop.run_until_complete(_analyze())
+    return asyncio.run(_analyze())
 
 
 @celery_app.task(
@@ -253,8 +252,7 @@ def detect_comment_language(
             update_task_status(self.request.id, "failed", error_message=str(e))
             raise self.retry(exc=e)
 
-    loop = asyncio.get_event_loop()
-    return loop.run_until_complete(_detect())
+    return asyncio.run(_detect())
 
 
 @celery_app.task(

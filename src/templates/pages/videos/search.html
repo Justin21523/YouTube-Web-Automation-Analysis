@@ -1,0 +1,143 @@
+{% extends "base/_base.html" %}
+
+{% block title %}Search Videos{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div>
+        <h1 class="text-2xl font-bold">Search YouTube</h1>
+        <p class="text-slate-400 mt-1">Search and scrape videos from YouTube</p>
+    </div>
+
+    <!-- Search Box -->
+    <div class="bg-dark-secondary rounded-xl p-6 border border-slate-700">
+        <form id="search-form" class="space-y-4">
+            <div class="flex gap-3">
+                <div class="flex-1 relative">
+                    <i data-lucide="search" class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400"></i>
+                    <input type="text" id="search-query"
+                        class="input w-full pl-12 py-3 text-lg"
+                        placeholder="Search YouTube videos..."
+                        value="{{ initial_query }}">
+                </div>
+                <button type="submit" class="btn btn-primary px-6">
+                    <i data-lucide="search" class="w-5 h-5 mr-2"></i>
+                    Search
+                </button>
+            </div>
+
+            <!-- Search Options -->
+            <div class="flex flex-wrap gap-4 pt-2">
+                <div class="flex items-center gap-2">
+                    <label class="text-sm text-slate-400">Max Results:</label>
+                    <select id="max-results" class="input w-24 py-1">
+                        <option value="10">10</option>
+                        <option value="20" selected>20</option>
+                        <option value="50">50</option>
+                    </select>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" id="auto-scrape" class="form-checkbox">
+                    <label for="auto-scrape" class="text-sm text-slate-300">Auto-scrape results</label>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Search History -->
+    <div id="search-history-section" class="bg-dark-secondary rounded-xl border border-slate-700">
+        <div class="p-4 border-b border-slate-700 flex items-center justify-between">
+            <h2 class="font-semibold flex items-center">
+                <i data-lucide="history" class="w-5 h-5 mr-2 text-slate-400"></i>
+                Recent Searches
+            </h2>
+            <button id="clear-history" class="text-sm text-slate-400 hover:text-red-400">
+                Clear
+            </button>
+        </div>
+        <div id="search-history" class="p-4">
+            <div class="flex flex-wrap gap-2">
+                <span class="text-slate-400 text-sm">No recent searches</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results Section -->
+    <div id="results-section" class="hidden">
+        <!-- Results Header -->
+        <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-3">
+                <h2 class="font-semibold">Search Results</h2>
+                <span id="results-count" class="text-sm text-slate-400">0 results</span>
+            </div>
+            <button id="scrape-selected" class="btn btn-primary hidden">
+                <i data-lucide="download" class="w-4 h-4 mr-2"></i>
+                Scrape Selected (<span id="selected-count">0</span>)
+            </button>
+        </div>
+
+        <!-- Results Grid -->
+        <div id="results-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <!-- Results will be inserted here -->
+        </div>
+
+        <!-- Loading State -->
+        <div id="results-loading" class="hidden text-center py-12">
+            <i data-lucide="loader" class="w-10 h-10 mx-auto text-blue-500 animate-spin"></i>
+            <p class="mt-4 text-slate-400">Searching YouTube...</p>
+        </div>
+
+        <!-- No Results -->
+        <div id="no-results" class="hidden text-center py-12">
+            <i data-lucide="search-x" class="w-12 h-12 mx-auto text-slate-500 mb-4"></i>
+            <p class="text-slate-400">No videos found for your search</p>
+        </div>
+    </div>
+
+    <!-- Quick Tips -->
+    <div id="tips-section" class="bg-dark-secondary rounded-xl p-6 border border-slate-700">
+        <h3 class="font-semibold mb-4 flex items-center">
+            <i data-lucide="lightbulb" class="w-5 h-5 mr-2 text-yellow-500"></i>
+            Search Tips
+        </h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+            <div class="flex items-start gap-3">
+                <span class="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 text-xs">1</span>
+                <div>
+                    <p class="font-medium">Use specific keywords</p>
+                    <p class="text-slate-400">More specific queries yield better results</p>
+                </div>
+            </div>
+            <div class="flex items-start gap-3">
+                <span class="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 text-xs">2</span>
+                <div>
+                    <p class="font-medium">Paste YouTube URLs</p>
+                    <p class="text-slate-400">Paste a video URL to directly scrape it</p>
+                </div>
+            </div>
+            <div class="flex items-start gap-3">
+                <span class="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 text-xs">3</span>
+                <div>
+                    <p class="font-medium">Select multiple videos</p>
+                    <p class="text-slate-400">Click on videos to select them for batch scraping</p>
+                </div>
+            </div>
+            <div class="flex items-start gap-3">
+                <span class="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 text-xs">4</span>
+                <div>
+                    <p class="font-medium">Auto-scrape option</p>
+                    <p class="text-slate-400">Enable to automatically scrape all search results</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    window.INITIAL_QUERY = "{{ initial_query }}";
+</script>
+<script type="module" src="{{ url_for('static', path='js/pages/search.js') }}"></script>
+{% endblock %}

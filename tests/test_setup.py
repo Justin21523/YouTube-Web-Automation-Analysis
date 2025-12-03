@@ -11,10 +11,12 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
-from sqlalchemy import text  # ← ADD this import
+import asyncio
+from sqlalchemy import text
 from src.app.config import get_config, validate_config, reset_config
 from src.app.shared_cache import get_shared_cache, reset_cache
-from src.app.database import engine
+from src.app.database import db_manager, init_db_async
+from src.infrastructure.database.connection import init_database_from_config
 
 
 class TestConfiguration:
@@ -54,7 +56,7 @@ class TestConfiguration:
         assert "api" in summary
         assert "database" in summary
         assert "cache" in summary
-        assert "youtube" in summary
+        assert "youtube_api" in summary
         assert "scraping" in summary
 
         print("\n📋 Configuration Summary:")
@@ -173,11 +175,20 @@ class TestDatabase:
     """Test database connectivity"""
 
     def test_database_connection(self):
-        """Test database connection"""
-        with engine.connect() as connection:
-            result = connection.execute(text("SELECT 1"))
-            assert result.fetchone()[0] == 1  # type: ignore
+        """Test database connection (async)"""
+        async def _test():
+            # Initialize if needed
+            if not db_manager.is_initialized:
+                init_database_from_config()
 
+            async with db_manager.session() as session:
+                result = await session.execute(text("SELECT 1"))
+                value = result.scalar()
+                assert value == 1
+                return True
+
+        result = asyncio.run(_test())
+        assert result
         print("\n✅ Database connection successful")
 
     def test_database_config(self):
@@ -195,19 +206,30 @@ class TestIntegration:
 
     def test_full_stack(self):
         """Test full stack initialization"""
-        # Load config
-        config = get_config()
-        assert config is not None
+        import asyncio
 
-        # Initialize cache
-        cache = get_shared_cache()
-        assert cache is not None
+        async def _test():
+            # Load config
+            config = get_config()
+            assert config is not None
 
-        # Test database
-        with engine.connect() as connection:
-            result = connection.execute(text("SELECT 1"))
-            assert result.fetchone()[0] == 1  # type: ignore
+            # Initialize cache
+            cache = get_shared_cache()
+            assert cache is not None
 
+            # Test database using async db_manager
+            if not db_manager.is_initialized:
+                init_database_from_config()
+
+            async with db_manager.session() as session:
+                result = await session.execute(text("SELECT 1"))
+                value = result.scalar()
+                assert value == 1
+
+            return True
+
+        result = asyncio.run(_test())
+        assert result
         print("\n✅ Full stack integration works")
 
     def test_cache_config_integration(self):

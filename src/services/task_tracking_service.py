@@ -109,11 +109,19 @@ def update_task_status(
                 logger.warning(f"⚠️ Task {task_id} not found in database")
 
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            asyncio.create_task(_update())
+        # Use asyncio.run() for Python 3.10+ compatibility
+        # This creates a new event loop if none exists
+        asyncio.run(_update())
+    except RuntimeError as e:
+        # If already in an async context, try to use create_task
+        if "cannot be called from a running event loop" in str(e):
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(_update())
+            except RuntimeError:
+                logger.error(f"Failed to update task status (no event loop): {e}")
         else:
-            loop.run_until_complete(_update())
+            logger.error(f"Failed to update task status: {e}")
     except Exception as e:
         logger.error(f"Failed to update task status: {e}")
 

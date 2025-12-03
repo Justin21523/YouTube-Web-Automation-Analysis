@@ -17,13 +17,10 @@ from sqlalchemy import (
     ForeignKey,
     Enum as SQLEnum,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import relationship
 import enum
 
-# Replace with:
-from sqlalchemy.ext.declarative import declarative_base
-
-Base = declarative_base()
+from src.infrastructure.database.connection import Base
 
 
 class VideoStatus(str, enum.Enum):
@@ -124,6 +121,9 @@ class Video(Base):
     )
     analytics = relationship(
         "VideoAnalytics", back_populates="video", cascade="all, delete-orphan"
+    )
+    captions = relationship(
+        "Caption", back_populates="video", cascade="all, delete-orphan"
     )
 
     def __repr__(self):

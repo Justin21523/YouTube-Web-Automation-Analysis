@@ -1,0 +1,204 @@
+{% extends "base/_base.html" %}
+
+{% block title %}Analytics{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-bold">Analytics Dashboard</h1>
+            <p class="text-slate-400 mt-1">Insights and statistics from your YouTube data</p>
+        </div>
+        <div class="flex items-center gap-3">
+            <!-- Time Range Selector -->
+            <select id="time-range" class="input">
+                <option value="7d">Last 7 Days</option>
+                <option value="30d" selected>Last 30 Days</option>
+                <option value="90d">Last 90 Days</option>
+                <option value="all">All Time</option>
+            </select>
+            <button id="refresh-analytics" class="btn btn-secondary">
+                <i data-lucide="refresh-cw" class="w-4 h-4 mr-2"></i>
+                Refresh
+            </button>
+            <button id="export-data" class="btn btn-primary">
+                <i data-lucide="download" class="w-4 h-4 mr-2"></i>
+                Export
+            </button>
+        </div>
+    </div>
+
+    <!-- Overview Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="bg-dark-secondary rounded-xl p-4 border border-slate-700">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-sm text-slate-400">Total Views</span>
+                <i data-lucide="eye" class="w-4 h-4 text-blue-500"></i>
+            </div>
+            <p class="text-2xl font-bold" id="total-views">--</p>
+            <p class="text-xs text-green-500 mt-1" id="views-change">--</p>
+        </div>
+
+        <div class="bg-dark-secondary rounded-xl p-4 border border-slate-700">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-sm text-slate-400">Total Likes</span>
+                <i data-lucide="thumbs-up" class="w-4 h-4 text-green-500"></i>
+            </div>
+            <p class="text-2xl font-bold" id="total-likes">--</p>
+            <p class="text-xs text-green-500 mt-1" id="likes-change">--</p>
+        </div>
+
+        <div class="bg-dark-secondary rounded-xl p-4 border border-slate-700">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-sm text-slate-400">Comments Analyzed</span>
+                <i data-lucide="message-circle" class="w-4 h-4 text-yellow-500"></i>
+            </div>
+            <p class="text-2xl font-bold" id="total-comments-analyzed">--</p>
+            <p class="text-xs text-green-500 mt-1" id="comments-change">--</p>
+        </div>
+
+        <div class="bg-dark-secondary rounded-xl p-4 border border-slate-700">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-sm text-slate-400">Avg Engagement</span>
+                <i data-lucide="trending-up" class="w-4 h-4 text-purple-500"></i>
+            </div>
+            <p class="text-2xl font-bold" id="avg-engagement">--</p>
+            <p class="text-xs text-green-500 mt-1" id="engagement-change">--</p>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Scraping Activity Chart -->
+        <div class="bg-dark-secondary rounded-xl border border-slate-700">
+            <div class="p-4 border-b border-slate-700">
+                <h2 class="font-semibold flex items-center">
+                    <i data-lucide="activity" class="w-5 h-5 mr-2 text-blue-500"></i>
+                    Scraping Activity
+                </h2>
+            </div>
+            <div class="p-4">
+                <canvas id="scraping-chart" height="250"></canvas>
+            </div>
+        </div>
+
+        <!-- Content Distribution Chart -->
+        <div class="bg-dark-secondary rounded-xl border border-slate-700">
+            <div class="p-4 border-b border-slate-700">
+                <h2 class="font-semibold flex items-center">
+                    <i data-lucide="pie-chart" class="w-5 h-5 mr-2 text-green-500"></i>
+                    Content Distribution
+                </h2>
+            </div>
+            <div class="p-4">
+                <canvas id="distribution-chart" height="250"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Second Charts Row -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Views Over Time -->
+        <div class="bg-dark-secondary rounded-xl border border-slate-700">
+            <div class="p-4 border-b border-slate-700">
+                <h2 class="font-semibold flex items-center">
+                    <i data-lucide="bar-chart-2" class="w-5 h-5 mr-2 text-yellow-500"></i>
+                    Views Analysis
+                </h2>
+            </div>
+            <div class="p-4">
+                <canvas id="views-chart" height="250"></canvas>
+            </div>
+        </div>
+
+        <!-- Engagement Metrics -->
+        <div class="bg-dark-secondary rounded-xl border border-slate-700">
+            <div class="p-4 border-b border-slate-700">
+                <h2 class="font-semibold flex items-center">
+                    <i data-lucide="heart" class="w-5 h-5 mr-2 text-red-500"></i>
+                    Engagement Metrics
+                </h2>
+            </div>
+            <div class="p-4">
+                <canvas id="engagement-chart" height="250"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Content Section -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Top Videos -->
+        <div class="bg-dark-secondary rounded-xl border border-slate-700">
+            <div class="p-4 border-b border-slate-700 flex items-center justify-between">
+                <h2 class="font-semibold flex items-center">
+                    <i data-lucide="trending-up" class="w-5 h-5 mr-2 text-blue-500"></i>
+                    Top Videos
+                </h2>
+                <select id="top-videos-sort" class="input py-1 text-sm">
+                    <option value="views">By Views</option>
+                    <option value="likes">By Likes</option>
+                    <option value="comments">By Comments</option>
+                </select>
+            </div>
+            <div id="top-videos" class="p-4 space-y-3">
+                <div class="text-center py-8 text-slate-400">
+                    <i data-lucide="loader" class="w-8 h-8 mx-auto animate-spin"></i>
+                    <p class="mt-2 text-sm">Loading...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Channels -->
+        <div class="bg-dark-secondary rounded-xl border border-slate-700">
+            <div class="p-4 border-b border-slate-700">
+                <h2 class="font-semibold flex items-center">
+                    <i data-lucide="users" class="w-5 h-5 mr-2 text-red-500"></i>
+                    Top Channels
+                </h2>
+            </div>
+            <div id="top-channels" class="p-4 space-y-3">
+                <div class="text-center py-8 text-slate-400">
+                    <i data-lucide="loader" class="w-8 h-8 mx-auto animate-spin"></i>
+                    <p class="mt-2 text-sm">Loading...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Activity Table -->
+    <div class="bg-dark-secondary rounded-xl border border-slate-700">
+        <div class="p-4 border-b border-slate-700">
+            <h2 class="font-semibold flex items-center">
+                <i data-lucide="clock" class="w-5 h-5 mr-2 text-slate-400"></i>
+                Recent Scraping Activity
+            </h2>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead>
+                    <tr class="text-left text-sm text-slate-400 border-b border-slate-700">
+                        <th class="p-4">Video</th>
+                        <th class="p-4">Channel</th>
+                        <th class="p-4">Views</th>
+                        <th class="p-4">Scraped</th>
+                        <th class="p-4">Status</th>
+                    </tr>
+                </thead>
+                <tbody id="recent-activity">
+                    <tr>
+                        <td colspan="5" class="p-8 text-center text-slate-400">
+                            <i data-lucide="loader" class="w-6 h-6 mx-auto mb-2 animate-spin"></i>
+                            Loading activity...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script type="module" src="{{ url_for('static', path='js/pages/analytics.js') }}"></script>
+{% endblock %}
