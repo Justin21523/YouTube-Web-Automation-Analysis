@@ -1,0 +1,59 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>YouTube Web Automation &amp; Analysis Platform — Interactive Demo</title>
+<meta name="description" content="Intelligent YouTube analytics combining API ingestion, web scraping, and LLM/RAG">
+<style>
+:root{--bg:#0a0b10;--panel:#13151d;--panel2:#1a1d28;--line:#262a38;--txt:#e7e9f2;--mut:#9aa0b4;--acc:#FF0033;--acc2:#1F2933}
+*{box-sizing:border-box}html,body{margin:0}body{background:var(--bg);color:var(--txt);font:15px/1.6 'Inter',system-ui,'Noto Sans TC',sans-serif}
+a{color:var(--acc)}.wrap{max-width:1080px;margin:0 auto;padding:0 20px}
+.badge{display:inline-block;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--acc);border:1px solid var(--line);border-radius:999px;padding:4px 12px;background:#11131b}
+header.hero{padding:72px 0 36px;background:radial-gradient(900px 380px at 70% -10%,#FF003322,transparent),radial-gradient(700px 300px at 0% 10%,#1F29331f,transparent)}
+h1{font-size:clamp(30px,5vw,48px);margin:16px 0 8px;font-weight:800;letter-spacing:-.02em}
+.tag{color:var(--mut);font-size:18px;max-width:680px}
+.cta{margin-top:22px;display:flex;gap:10px;flex-wrap:wrap}
+.btn{background:linear-gradient(135deg,var(--acc),var(--acc2));color:#0a0b10;font-weight:700;border:0;border-radius:10px;padding:11px 18px;cursor:pointer;text-decoration:none;display:inline-flex;gap:8px;align-items:center}
+.btn.ghost{background:#11131b;color:var(--txt);border:1px solid var(--line)}
+section{padding:40px 0;border-top:1px solid var(--line)}
+.h2{font-size:13px;text-transform:uppercase;letter-spacing:.12em;color:var(--mut);margin:0 0 18px}
+.demo{display:grid;grid-template-columns:340px 1fr;gap:18px}@media(max-width:780px){.demo{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
+.field label{display:block;font-size:12px;color:var(--mut);margin:12px 0 6px}
+.field input,.field select,.field textarea{width:100%;background:#0d0f16;border:1px solid var(--line);color:var(--txt);border-radius:9px;padding:10px;font:inherit}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.chip{font-size:12px;color:var(--mut);background:#11131b;border:1px solid var(--line);border-radius:999px;padding:5px 10px}
+.out{min-height:280px;display:grid;place-items:center;text-align:center;color:var(--mut)}
+.gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.thumb{aspect-ratio:1;border-radius:12px;border:1px solid var(--line);position:relative;overflow:hidden;display:grid;place-items:end;padding:8px;font-size:11px;color:#fff;text-shadow:0 1px 4px #000}
+.metrics{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
+.metric{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+.metric .v{font-size:26px;font-weight:800;background:linear-gradient(135deg,var(--acc),var(--acc2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.metric .k{color:var(--mut);font-size:12px;margin-top:4px}
+.steps{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.step{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 14px;font-size:13px}.arrow{color:var(--mut)}
+.feat{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}.feat .card h3{margin:0 0 6px;font-size:15px}.feat .card p{margin:0;color:var(--mut);font-size:13px}
+footer{padding:40px 0 64px;color:var(--mut);font-size:13px}.note{font-size:12px;color:var(--mut);margin-top:10px}
+.spin{display:inline-block;width:16px;height:16px;border:2px solid #fff5;border-top-color:#fff;border-radius:50%;animation:s .7s linear infinite}@keyframes s{to{transform:rotate(360deg)}}
+</style></head><body>
+<header class="hero"><div class="wrap">
+<span class="badge">Interactive Demo · Data · NLP · LLM</span>
+<h1>YouTube Web Automation &amp; Analysis Platform</h1><p class="tag">Intelligent YouTube analytics combining API ingestion, web scraping, and LLM/RAG</p>
+<div class="cta"><a class="btn" href="#try">▶ Try the demo</a><a class="btn ghost" href="https://github.com/Justin21523/YouTube-Web-Automation-Analysis">View Source</a><a class="btn ghost" href="https://justin21523.github.io/en/projects/YouTube-Web-Automation-Analysis">← Portfolio</a></div>
+<p class="note">⚠ This is an interactive <b>demo/showcase</b> with representative sample results — the full system runs heavy models (GPU) and is not executed in-browser.</p>
+</div></header>
+<main class="wrap">
+<section id="try"><div class="h2">Live Playground (mock)</div><div class="demo">
+<div class="card"><div style="font-weight:700">Analyze a YouTube Channel or Video</div>
+<div class="field"><label>YouTube URL or Channel ID</label><input value="https://www.youtube.com/watch?v=dQw4w9WgXcQ" placeholder="Paste a video, channel, or playlist URL"></div><div class="field"><label>Analysis Mode</label><select><option>Sentiment Analysis</option><option>Topic Modeling</option><option>RAG Q&amp;A</option><option>Visual Question Answering</option><option>Conversational Chat</option></select></div>
+<button class="btn" style="margin-top:16px;width:100%" id="go">Run Analysis</button>
+</div>
+<div class="card"><div class="h2" style="margin:0 0 12px">Output</div><div class="out" id="out"><div>Configure inputs and run to see a representative result.</div></div></div>
+</div></section>
+<section><div class="h2">Sample Results</div><div class="gal"><div class="thumb" style="background:linear-gradient(135deg,#7c5cff,#00d4ff)">Layered Clean Architecture overview (domain / services / infrastructure / api)</div><div class="thumb" style="background:linear-gradient(135deg,#ff6b6b,#ffd93d)">Dual-track ingestion flow: YouTube Data API v3 with Playwright/Selenium fallback</div><div class="thumb" style="background:linear-gradient(135deg,#22c55e,#06b6d4)">Celery + Redis task orchestration across scraping / analysis / priority queues</div><div class="thumb" style="background:linear-gradient(135deg,#f472b6,#a78bfa)">Comment sentiment distribution dashboard (positive / negative / neutral)</div><div class="thumb" style="background:linear-gradient(135deg,#f59e0b,#ef4444)">Topic modeling clusters extracted from comments and captions</div><div class="thumb" style="background:linear-gradient(135deg,#10b981,#3b82f6)">Prometheus + Grafana monitoring stack with Flower task view</div></div></section>
+<section><div class="h2">Benchmarks & Metrics</div><div class="metrics"><div class="metric"><div class="v">2</div><div class="k">Ingestion tracks (API + scraping)</div></div><div class="metric"><div class="v">3</div><div class="k">Celery queues</div></div><div class="metric"><div class="v">5</div><div class="k">Domain entities</div></div><div class="metric"><div class="v">3</div><div class="k">LLM backends supported</div></div></div></section>
+<section><div class="h2">Pipeline / Architecture</div><div class="steps"><span class="step">Submit a YouTube URL; the API-first client checks daily quota and rate limits</span><span class="arrow">→</span><span class="step">Fall back to Playwright/Selenium stealth scraping when the API is constrained</span><span class="arrow">→</span><span class="step">Queue ingestion, analysis, and embedding jobs onto Celery + Redis</span><span class="arrow">→</span><span class="step">Persist channels, videos, comments, and captions via async SQLAlchemy repositories</span><span class="arrow">→</span><span class="step">Run sentiment analysis and topic modeling over comments and captions</span><span class="arrow">→</span><span class="step">Embed sources and serve RAG / VQA / chat answers through the unified LLM client</span><span class="arrow">→</span><span class="step">Stream task progress over WebSocket and surface results via FastAPI routes</span></div></section>
+<section><div class="h2">Key Capabilities</div><div class="feat"><div class="card"><h3>Dual-track ingestion</h3><p>API-first with Playwright/Selenium scraping fallback, rate limiting, and daily quota tracking</p></div><div class="card"><h3>Async orchestration</h3><p>Celery + Redis across scraping/analysis/priority queues with Beat scheduling and Flower monitoring</p></div><div class="card"><h3>Clean Architecture</h3><p>Layered separation of domain, services, infrastructure repositories, and API routers</p></div><div class="card"><h3>Unified LLM client</h3><p>Pluggable abstraction over OpenAI, LLMVendor LLMProvider, and local models for RAG, VQA, and chat</p></div><div class="card"><h3>NLP analytics</h3><p>Sentiment analysis and topic modeling with transformers, sentence-transformers, spaCy, and scikit-learn</p></div><div class="card"><h3>Containerized stack</h3><p>docker-compose deployment with Prometheus + Grafana monitoring and an Nginx reverse proxy</p></div></div></section>
+<section><div class="h2">Tech Stack</div><div class="chips"><span class="chip">FastAPI</span><span class="chip">SQLAlchemy 2.0 (async)</span><span class="chip">Celery + Redis</span><span class="chip">Playwright / Selenium</span><span class="chip">YouTube Data API v3</span><span class="chip">transformers / sentence-transformers</span><span class="chip">spaCy / scikit-learn</span><span class="chip">LLMVendor LLMProvider / OpenAI / local LLMs</span><span class="chip">Docker Compose</span><span class="chip">Prometheus + Grafana</span></div></section>
+</main>
+<footer class="wrap">YouTube Web Automation &amp; Analysis Platform · interactive showcase · <a href="https://github.com/Justin21523/YouTube-Web-Automation-Analysis">GitHub</a> · <a href="https://github.com/Justin21523/YouTube-Web-Automation-Analysis#readme">README</a> · <a href="https://justin21523.github.io/en/projects/YouTube-Web-Automation-Analysis">justin21523.github.io</a></footer>
+<script>
+var OUT="<div style=\"width:100%\"><div class=\"gal\"><div class=\"thumb\" style=\"background:linear-gradient(135deg,#22c55e,#06b6d4)\">Sentiment distribution: 150 positive \u00b7 30 neutral \u00b7 20 negative (mock)</div><div class=\"thumb\" style=\"background:linear-gradient(135deg,#f472b6,#a78bfa)\">Top topics: tutorial walkthrough, audio quality, pricing, beginner tips (mock)</div><div class=\"thumb\" style=\"background:linear-gradient(135deg,#f59e0b,#ef4444)\">RAG answer: &quot;Viewers most praise the clear step-by-step pacing&quot; with 3 cited comments (mock)</div><div class=\"thumb\" style=\"background:linear-gradient(135deg,#10b981,#3b82f6)\">Caption summary + engagement metrics snapshot (views, likes, comment rate) (mock)</div></div><p class=\"note\" style=\"text-align:left\">mock</p></div>";
+document.getElementById('go').onclick=function(){var o=document.getElementById('out');o.innerHTML='<div><span class="spin"></span><div style="margin-top:10px">Running pipeline…</div></div>';setTimeout(function(){o.innerHTML=OUT},900)};
+</script></body></html>
